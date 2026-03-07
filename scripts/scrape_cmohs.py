@@ -38,7 +38,7 @@ HEADERS = {
 }
 
 # Non-recipient paths under /recipients/ to skip
-SKIP_SLUGS = {"connect", "overview", "page"}
+SKIP_SLUGS = {"connect", "overview", "page", "lists"}
 
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2  # seconds, doubled each retry
@@ -104,6 +104,9 @@ def build_page_urls(total_pages: int) -> list[str]:
 def is_recipient_url(href: str) -> bool:
     """Return True if the URL points to an individual recipient profile."""
     if not href or "/recipients/" not in href:
+        return False
+    # Skip sub-paths like /recipients/lists/*
+    if "/recipients/lists/" in href:
         return False
     # Extract the slug after /recipients/
     parts = href.rstrip("/").split("/recipients/")
