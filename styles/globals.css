@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap');
+
+:root {
+  --navy-950: #060e1a;
+  --navy-900: #0a1628;
+  --navy-800: #112240;
+  --navy-700: #1a3560;
+  --navy-600: #243e6a;
+  --gold-300: #e8c97a;
+  --gold-400: #c9a84c;
+  --gold-500: #a8862a;
+  --cream: #f5f0e8;
+  --text-muted: #8a9bb5;
+
+  --award-moh: #C9A84C;
+  --award-dsc: #4A90D9;
+  --award-nc: #1B4F8A;
+  --award-afc: #5B8DB8;
+  --award-cgc: #003F87;
+  --award-ss: #A8A8A8;
+  --award-dfc: #7B9EA6;
+  --award-lom: #8B0000;
+  --award-bsm: #CD7F32;
+  --award-bsm-v: #E8A030;
+  --award-ph: #6A0DAD;
+  --award-pow: #8B6914;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-navy-950 text-cream font-body antialiased;
+    font-size: 18px;
+    line-height: 1.7;
+  }
+
+  h1, h2 {
+    @apply font-display font-black tracking-display;
+  }
+
+  h3, h4 {
+    @apply font-display font-bold;
+  }
+
+  ::selection {
+    background: var(--gold-400);
+    color: var(--navy-950);
+  }
+}
+
+@layer components {
+  .grain-overlay {
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    right: -50%;
+    bottom: -50%;
+    width: 200%;
+    height: 200%;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    animation: grain 8s steps(10) infinite;
+  }
+
+  .grain-overlay-light {
+    opacity: 0.02;
+  }
+
+  .citation-block {
+    @apply relative bg-cream/95 text-navy-900 rounded-lg p-6 border-l-4;
+    font-family: 'Crimson Pro', serif;
+    line-height: 1.8;
+    max-width: 68ch;
+  }
+
+  .citation-block::before,
+  .citation-block::after {
+    content: '';
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-color: var(--gold-400);
+    opacity: 0.5;
+  }
+
+  .citation-block::before {
+    top: 8px;
+    left: 8px;
+    border-top: 2px solid;
+    border-left: 2px solid;
+  }
+
+  .citation-block::after {
+    bottom: 8px;
+    right: 8px;
+    border-bottom: 2px solid;
+    border-right: 2px solid;
+  }
+
+  .small-caps {
+    font-variant: small-caps;
+    letter-spacing: 0.15em;
+    @apply font-body;
+  }
+
+  .parchment-bg {
+    background: linear-gradient(135deg, #f5f0e8 0%, #ede5d5 50%, #f5f0e8 100%);
+    background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='paper'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.04' numOctaves='5'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23paper)' opacity='0.03'/%3E%3C/svg%3E");
+  }
+
+  .focus-ring {
+    @apply outline-none ring-2 ring-offset-2 ring-offset-navy-900;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .grain-overlay {
+    animation: none !important;
+  }
+}

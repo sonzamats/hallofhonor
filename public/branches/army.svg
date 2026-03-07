@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" rx="4" fill="#4B5320"/>
+  <!-- Shield -->
+  <path d="M24 6 L36 12 L36 28 L24 38 L12 28 L12 12 Z" fill="none" stroke="#DAA520" stroke-width="1.5"/>
+  <!-- Star -->
+  <polygon points="24,12 26.5,19 34,19 28,23.5 30,31 24,27 18,31 20,23.5 14,19 21.5,19" fill="#DAA520"/>
+</svg>

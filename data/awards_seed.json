@@ -1,0 +1,112 @@
+[
+  {
+    "slug": "medal-of-honor",
+    "name": "Medal of Honor",
+    "short_name": "MOH",
+    "precedence_rank": 1,
+    "established_year": 1861,
+    "color_hex": "#C9A84C",
+    "description": "The highest military decoration, awarded for conspicuous gallantry and intrepidity at the risk of life above and beyond the call of duty.",
+    "branch_variants": ["Army", "Navy", "Marine Corps", "Air Force", "Coast Guard"]
+  },
+  {
+    "slug": "distinguished-service-cross",
+    "name": "Distinguished Service Cross",
+    "short_name": "DSC",
+    "precedence_rank": 2,
+    "established_year": 1918,
+    "color_hex": "#4A90D9",
+    "description": "The second-highest military decoration of the U.S. Army, awarded for extraordinary heroism in combat.",
+    "branch_variants": ["Army"]
+  },
+  {
+    "slug": "navy-cross",
+    "name": "Navy Cross",
+    "short_name": "NC",
+    "precedence_rank": 2,
+    "established_year": 1919,
+    "color_hex": "#1B4F8A",
+    "description": "The second-highest military decoration of the U.S. Navy and Marine Corps, for extraordinary heroism in combat.",
+    "branch_variants": ["Navy", "Marine Corps"]
+  },
+  {
+    "slug": "air-force-cross",
+    "name": "Air Force Cross",
+    "short_name": "AFC",
+    "precedence_rank": 2,
+    "established_year": 1960,
+    "color_hex": "#5B8DB8",
+    "description": "The second-highest military decoration of the U.S. Air Force, for extraordinary heroism in combat.",
+    "branch_variants": ["Air Force"]
+  },
+  {
+    "slug": "coast-guard-cross",
+    "name": "Coast Guard Cross",
+    "short_name": "CGC",
+    "precedence_rank": 2,
+    "established_year": 2003,
+    "color_hex": "#003F87",
+    "description": "The second-highest military decoration of the U.S. Coast Guard, for extraordinary heroism in combat.",
+    "branch_variants": ["Coast Guard"]
+  },
+  {
+    "slug": "silver-star",
+    "name": "Silver Star",
+    "short_name": "SS",
+    "precedence_rank": 6,
+    "established_year": 1918,
+    "color_hex": "#A8A8A8",
+    "description": "Awarded for gallantry in action against an enemy of the United States.",
+    "branch_variants": ["Army", "Navy", "Marine Corps", "Air Force", "Coast Guard"]
+  },
+  {
+    "slug": "legion-of-merit",
+    "name": "Legion of Merit",
+    "short_name": "LOM",
+    "precedence_rank": 7,
+    "established_year": 1942,
+    "color_hex": "#8B0000",
+    "description": "Awarded for exceptionally meritorious conduct in the performance of outstanding services.",
+    "branch_variants": ["Army", "Navy", "Marine Corps", "Air Force", "Coast Guard"]
+  },
+  {
+    "slug": "distinguished-flying-cross",
+    "name": "Distinguished Flying Cross",
+    "short_name": "DFC",
+    "precedence_rank": 8,
+    "established_year": 1926,
+    "color_hex": "#7B9EA6",
+    "description": "Awarded for heroism or extraordinary achievement while participating in aerial flight.",
+    "branch_variants": ["Army", "Navy", "Marine Corps", "Air Force", "Coast Guard"]
+  },
+  {
+    "slug": "bronze-star",
+    "name": "Bronze Star Medal",
+    "short_name": "BSM",
+    "precedence_rank": 11,
+    "established_year": 1944,
+    "color_hex": "#CD7F32",
+    "description": "Awarded for heroic or meritorious achievement or service in a combat zone.",
+    "branch_variants": ["Army", "Navy", "Marine Corps", "Air Force", "Coast Guard"]
+  },
+  {
+    "slug": "purple-heart",
+    "name": "Purple Heart",
+    "short_name": "PH",
+    "precedence_rank": 12,
+    "established_year": 1782,
+    "color_hex": "#6A0DAD",
+    "description": "Awarded to those wounded or killed while serving in the U.S. military. The oldest military decoration still in use.",
+    "branch_variants": ["Army", "Navy", "Marine Corps", "Air Force", "Coast Guard", "Space Force"]
+  },
+  {
+    "slug": "pow-medal",
+    "name": "Prisoner of War Medal",
+    "short_name": "POW",
+    "precedence_rank": 14,
+    "established_year": 1985,
+    "color_hex": "#8B6914",
+    "description": "Awarded to any member of the U.S. Armed Forces taken prisoner of war during any armed conflict.",
+    "branch_variants": ["Army", "Navy", "Marine Corps", "Air Force", "Coast Guard"]
+  }
+]

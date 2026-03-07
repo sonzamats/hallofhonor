@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" rx="4" fill="#0a1628"/>
+  <!-- Delta shape -->
+  <polygon points="24,6 38,40 10,40" fill="none" stroke="#C0C0C0" stroke-width="2"/>
+  <!-- Inner delta -->
+  <polygon points="24,14 33,36 15,36" fill="none" stroke="#C0C0C0" stroke-width="1"/>
+  <!-- Star at center -->
+  <polygon points="24,20 25.2,23.5 29,23.5 26,25.8 27,29 24,27 21,29 22,25.8 19,23.5 22.8,23.5" fill="#C0C0C0"/>
+  <!-- Orbital swoosh -->
+  <path d="M12 28 Q24 18 36 28" fill="none" stroke="#C0C0C0" stroke-width="1.2"/>
+</svg>

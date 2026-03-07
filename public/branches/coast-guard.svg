@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" rx="4" fill="white"/>
+  <!-- Blue stripe -->
+  <rect x="0" y="20" width="48" height="8" fill="#003F87"/>
+  <!-- Shield -->
+  <path d="M16 10 L32 10 L32 30 L24 38 L16 30 Z" fill="#003F87" stroke="#DAA520" stroke-width="1.5"/>
+  <!-- Shield details -->
+  <line x1="16" y1="18" x2="32" y2="18" stroke="#DAA520" stroke-width="1"/>
+  <rect x="20" y="11" width="8" height="7" fill="#C41E3A"/>
+  <!-- Anchors simplified -->
+  <line x1="24" y1="20" x2="24" y2="34" stroke="#DAA520" stroke-width="1.5"/>
+  <line x1="20" y1="24" x2="28" y2="24" stroke="#DAA520" stroke-width="1.5"/>
+  <circle cx="24" cy="20" r="1.5" fill="none" stroke="#DAA520" stroke-width="1"/>
+</svg>
