@@ -37,6 +37,19 @@ logger = logging.getLogger(__name__)
 # Slug helper
 # ---------------------------------------------------------------------------
 
+def _parse_date(date_str: str) -> str | None:
+    """Parse a date string like 'June 10, 1951' to ISO 'YYYY-MM-DD' format."""
+    if not date_str or not date_str.strip():
+        return None
+    from datetime import datetime
+    for fmt in ("%B %d, %Y", "%b %d, %Y", "%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(date_str.strip(), fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
+
 def slugify(text: str) -> str:
     """Convert a string to a URL-friendly slug."""
     s = text.lower().strip()
@@ -141,32 +154,59 @@ def upsert_recipients(client, recipients: list[dict],
         batch = recipients[i: i + batch_size]
         rows = []
         for rec in batch:
+            # Parse first/last name from full_name if not already split
+            first_name = rec.get("first_name", "")
+            last_name = rec.get("last_name", "")
+            if not first_name and rec.get("full_name"):
+                parts = rec["full_name"].split()
+                first_name = parts[0] if parts else ""
+                last_name = parts[-1] if len(parts) > 1 else ""
+
+            # Parse date strings to ISO format (YYYY-MM-DD) for Supabase
+            date_of_action = _parse_date(rec.get("date_of_action", ""))
+            date_awarded = _parse_date(rec.get("date_awarded", ""))
+            date_of_birth = _parse_date(rec.get("date_of_birth", ""))
+            date_of_death = _parse_date(rec.get("date_of_death", ""))
+
+            # Parse entered_service_state from accredited location
+            entered_service = rec.get("entered_service_state", "") or rec.get("state", "")
+
             row = {
-                "full_name": rec.get("full_name", ""),
+                "first_name": first_name,
+                "last_name": last_name,
                 "rank": rec.get("rank", ""),
                 "branch": rec.get("branch", ""),
                 "conflict": rec.get("conflict", ""),
-                "state": rec.get("state", ""),
-                "date_of_action": rec.get("date_of_action", "") or None,
-                "date_awarded": rec.get("date_awarded", "") or None,
+                "entered_service_state": entered_service,
+                "date_of_action": date_of_action,
+                "date_awarded": date_awarded,
+                "date_of_birth": date_of_birth,
+                "date_of_death": date_of_death,
+                "posthumous": rec.get("posthumous", False),
                 "citation": rec.get("citation", ""),
                 "photo_url": rec.get("photo_url", ""),
-                "birth_location": rec.get("birth_location", ""),
+                "action_location_name": rec.get("action_location_name", ""),
             }
+            # Only include non-empty values
+            row = {k: v for k, v in row.items() if v is not None and v != ""}
+            # first_name and last_name are required
+            row.setdefault("first_name", "Unknown")
+            row.setdefault("last_name", "Unknown")
             rows.append(row)
 
         if dry_run:
             for row in rows:
+                name = f"{row.get('first_name', '')} {row.get('last_name', '')}"
                 logger.info("[DRY RUN] Would upsert recipient: %s (%s)",
-                            row["full_name"], row["branch"])
-                results.append({**row, "id": f"dry-run-{slugify(row['full_name'])}"})
+                            name, row.get("branch", ""))
+                results.append({**row, "id": f"dry-run-{slugify(name)}"})
             inserted += len(rows)
             continue
 
         try:
             resp = (
                 client.table("recipients")
-                .upsert(rows, on_conflict="full_name,branch")
+                .insert(rows)
                 .execute()
             )
             if resp.data:
@@ -176,7 +216,7 @@ def upsert_recipients(client, recipients: list[dict],
                 errors += len(rows)
         except Exception as exc:
             errors += len(rows)
-            logger.error("Failed to upsert recipient batch %d–%d: %s",
+            logger.error("Failed to insert recipient batch %d–%d: %s",
                          i, i + len(rows), exc)
 
     logger.info("Recipients — inserted/updated: %d, errors: %d", inserted, errors)

@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -37,9 +37,12 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
+# Non-recipient paths under /recipients/ to skip
+SKIP_SLUGS = {"connect", "overview", "page"}
+
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2  # seconds, doubled each retry
-RATE_LIMIT_DELAY = 1  # seconds between requests
+RATE_LIMIT_DELAY = 0.5  # seconds between requests
 
 logger = logging.getLogger(__name__)
 
@@ -71,60 +74,69 @@ def _get(url: str, params: dict | None = None, session: requests.Session | None 
 # Pagination
 # ---------------------------------------------------------------------------
 
-def discover_pages(session: requests.Session) -> list[str]:
-    """Return a list of recipient-list page URLs (page 1 … N)."""
-    logger.info("Discovering pagination from %s", BASE_URL)
+def discover_total_pages(session: requests.Session) -> int:
+    """Find the last page number from pagination links on the first page."""
     resp = _get(BASE_URL, session=session)
     soup = BeautifulSoup(resp.text, "lxml")
 
-    pages = [BASE_URL]
-    pagination = soup.select("nav.pagination a, ul.pagination a, a.page-link")
-    for link in pagination:
-        href = link.get("href")
-        if href:
-            full = urljoin(BASE_URL, href)
-            if full not in pages:
-                pages.append(full)
+    max_page = 1
+    for a in soup.select("a[href*='/recipients/page/']"):
+        href = a.get("href", "")
+        m = re.search(r"/page/(\d+)", href)
+        if m:
+            max_page = max(max_page, int(m.group(1)))
 
-    # If no pagination links were found, try query-string pattern
-    if len(pages) == 1:
-        # Probe pages until we get a redirect or empty list
-        page_num = 2
-        while True:
-            test_url = f"{BASE_URL}?page={page_num}"
-            try:
-                resp = _get(test_url, session=session)
-                soup = BeautifulSoup(resp.text, "lxml")
-                if not soup.select("a[href*='recipient'], .recipient, .card, table tbody tr"):
-                    break
-                pages.append(test_url)
-                page_num += 1
-                if page_num > 200:  # safety cap
-                    break
-            except RuntimeError:
-                break
+    return max_page
 
-    logger.info("Found %d page(s)", len(pages))
-    return pages
+
+def build_page_urls(total_pages: int) -> list[str]:
+    """Generate all listing page URLs."""
+    urls = [BASE_URL]  # page 1 has no /page/ suffix
+    for p in range(2, total_pages + 1):
+        urls.append(f"{BASE_URL}/page/{p}")
+    return urls
 
 
 # ---------------------------------------------------------------------------
-# Detail extraction
+# Listing page extraction
 # ---------------------------------------------------------------------------
+
+def is_recipient_url(href: str) -> bool:
+    """Return True if the URL points to an individual recipient profile."""
+    if not href or "/recipients/" not in href:
+        return False
+    # Extract the slug after /recipients/
+    parts = href.rstrip("/").split("/recipients/")
+    if len(parts) < 2:
+        return False
+    slug = parts[-1].split("/")[0]
+    if slug in SKIP_SLUGS or slug.startswith("page"):
+        return False
+    # Must look like a name slug (contains letters and hyphens)
+    if not re.match(r"^[a-z]", slug):
+        return False
+    return True
+
 
 def extract_recipient_links(page_url: str, session: requests.Session) -> list[str]:
     """Extract individual recipient profile URLs from a listing page."""
     resp = _get(page_url, session=session)
     soup = BeautifulSoup(resp.text, "lxml")
+
+    # The listing uses <section class="ribbon-teaser-grid"> with <a class="block">
     links: list[str] = []
-    for a in soup.select("a[href*='recipient'], a[href*='/recipients/']"):
-        href = a.get("href")
-        if href and "/recipients/" in href:
-            full = urljoin(page_url, href)
-            if full not in links:
-                links.append(full)
+    for a in soup.select("section#recipients_grid a.block, a[href*='/recipients/']"):
+        href = a.get("href", "")
+        full = urljoin(page_url, href)
+        if is_recipient_url(full) and full not in links:
+            links.append(full)
+
     return links
 
+
+# ---------------------------------------------------------------------------
+# Detail page extraction
+# ---------------------------------------------------------------------------
 
 def scrape_recipient(url: str, session: requests.Session) -> dict:
     """Scrape a single recipient detail page and return a dict."""
@@ -135,41 +147,117 @@ def scrape_recipient(url: str, session: requests.Session) -> dict:
         el = soup.select_one(selector)
         return el.get_text(strip=True) if el else ""
 
-    def _meta(label: str) -> str:
-        """Find a value next to a label element (common pattern on detail pages)."""
-        for el in soup.find_all(["dt", "th", "strong", "span", "label"]):
-            if label.lower() in el.get_text(strip=True).lower():
-                sibling = el.find_next(["dd", "td", "span", "p", "div"])
-                if sibling:
-                    return sibling.get_text(strip=True)
-        return ""
+    # The detail page has fields like "Rank:Corporal" as concatenated text
+    # in dt/dd or similar pairs. Extract key-value pairs from the page.
+    fields: dict[str, str] = {}
+    # Look for patterns like "Label:Value" in dedicated detail sections
+    for el in soup.find_all(["dt", "li", "div"]):
+        text = el.get_text(strip=True)
+        # Match "Key:Value" patterns (the site concatenates label and value)
+        for key in ["Rank", "Conflict/Era", "Military Service Branch",
+                     "Medal of Honor Action Date", "Medal of Honor Action Place",
+                     "Accredited to", "Awarded Posthumously",
+                     "Presentation Date & Details", "Born", "Died",
+                     "Unit/Command", "Buried"]:
+            if text.startswith(key + ":"):
+                value = text[len(key) + 1:].strip()
+                fields[key] = value
+                break
 
-    # Photo
+    # Name — use the h1 with class "flyweight" (the actual recipient name),
+    # or fall back to og:title, then generic h1
+    name_el = soup.select_one("h1.flyweight")
+    if name_el:
+        full_name = name_el.get_text(strip=True)
+    else:
+        og = soup.select_one('meta[property="og:title"]')
+        if og and og.get("content"):
+            full_name = og["content"].split("|")[0].strip()
+        else:
+            full_name = _text("h1").strip()
+
+    # Photo - look for the main recipient image
     photo_url = ""
-    img = soup.select_one("img.recipient-photo, img.profile-photo, .recipient img, article img")
-    if img:
-        src = img.get("src") or img.get("data-src") or ""
-        if src:
+    for img in soup.select("img[data-src], img[src]"):
+        src = img.get("data-src") or img.get("src") or ""
+        if "/media/" in src and "fallback" not in src:
             photo_url = urljoin(url, src)
+            break
 
-    full_name = (
-        _text("h1")
-        or _text(".recipient-name")
-        or _text("title")
-    )
+    # Citation text
+    citation = ""
+    citation_el = soup.select_one(".citation, .citation-text, [class*=citation]")
+    if citation_el:
+        citation = citation_el.get_text(strip=True)
+    if not citation:
+        # Look for a long paragraph that looks like a citation
+        for p in soup.find_all("p"):
+            text = p.get_text(strip=True)
+            if len(text) > 200 and ("conspicuous" in text.lower()
+                                     or "gallantry" in text.lower()
+                                     or "heroism" in text.lower()
+                                     or "above and beyond" in text.lower()):
+                citation = text
+                break
+
+    # Parse born field for birth details
+    born_raw = fields.get("Born", "")
+    date_of_birth = ""
+    birth_location = ""
+    if born_raw:
+        # Format: "August 12, 1931, Terre Haute, Vigo County, Indiana, United States"
+        parts = born_raw.split(", ", 2)
+        if len(parts) >= 2:
+            # Try to detect if first part is month+day and second is year
+            m = re.match(r"^(\w+ \d+), (\d{4})", born_raw)
+            if m:
+                date_of_birth = f"{m.group(1)}, {m.group(2)}"
+                rest = born_raw[m.end():].lstrip(", ")
+                birth_location = rest
+            else:
+                birth_location = born_raw
+
+    died_raw = fields.get("Died", "")
+    date_of_death = ""
+    if died_raw:
+        m = re.match(r"^(\w+ \d+), (\d{4})", died_raw)
+        if m:
+            date_of_death = f"{m.group(1)}, {m.group(2)}"
+
+    # Parse name into first/last
+    name_parts = full_name.split()
+    first_name = name_parts[0] if name_parts else ""
+    last_name = name_parts[-1] if len(name_parts) > 1 else ""
+
+    # Parse action date
+    action_date_raw = fields.get("Medal of Honor Action Date", "")
+
+    # Parse "Awarded Posthumously"
+    posthumous = fields.get("Awarded Posthumously", "").lower() == "yes"
+
+    # Parse accredited state
+    accredited = fields.get("Accredited to", "")
 
     record = {
         "source_url": url,
         "full_name": full_name,
-        "rank": _meta("Rank"),
-        "branch": _meta("Branch") or _meta("Service"),
-        "conflict": _meta("War") or _meta("Conflict"),
-        "state": _meta("State") or _meta("Home"),
-        "date_of_action": _meta("Date of Action") or _meta("Action Date"),
-        "date_awarded": _meta("Date Awarded") or _meta("Award Date") or _meta("Date of Issue"),
-        "citation": _meta("Citation") or _text(".citation"),
+        "first_name": first_name,
+        "last_name": last_name,
+        "rank": fields.get("Rank", ""),
+        "branch": fields.get("Military Service Branch", ""),
+        "conflict": fields.get("Conflict/Era", ""),
+        "entered_service_state": accredited,
+        "date_of_action": action_date_raw,
+        "date_awarded": "",  # presentation date is complex, skip for now
+        "date_of_birth": date_of_birth,
+        "date_of_death": date_of_death,
+        "posthumous": posthumous,
+        "citation": citation,
         "photo_url": photo_url,
-        "birth_location": "",
+        "birth_location": birth_location,
+        "action_location_name": fields.get("Medal of Honor Action Place", ""),
+        "unit": fields.get("Unit/Command", ""),
+        "awards": ["Medal of Honor"],
     }
     return record
 
@@ -197,7 +285,6 @@ def lookup_birth_location(name: str, session: requests.Session) -> str:
             return ""
 
         page_title = results[0]["title"]
-        # Fetch the extract
         params2 = {
             "action": "query",
             "titles": page_title,
@@ -210,12 +297,10 @@ def lookup_birth_location(name: str, session: requests.Session) -> str:
         pages = resp2.json().get("query", {}).get("pages", {})
         for page in pages.values():
             extract = page.get("extract", "")
-            # Simple heuristic: look for "born in …" pattern
             for marker in ["born in ", "born at ", "from "]:
                 idx = extract.lower().find(marker)
                 if idx != -1:
                     fragment = extract[idx + len(marker): idx + len(marker) + 100]
-                    # Take up to the next period or parenthesis
                     end = len(fragment)
                     for ch in [".", ")", ",", ";"]:
                         pos = fragment.find(ch)
@@ -254,15 +339,22 @@ def main() -> None:
     session = requests.Session()
     session.headers.update(HEADERS)
 
-    # 1. Discover pages
-    pages = discover_pages(session)
+    # 1. Discover total pages
+    logger.info("Discovering pagination from %s", BASE_URL)
+    total_pages = discover_total_pages(session)
+    logger.info("Found %d pages", total_pages)
 
-    # 2. Collect profile links
+    page_urls = build_page_urls(total_pages)
+
+    # 2. Collect profile links from all listing pages
     all_links: list[str] = []
-    for page_url in pages:
-        links = extract_recipient_links(page_url, session)
-        logger.info("Page %s → %d recipient links", page_url, len(links))
-        all_links.extend(links)
+    for i, page_url in enumerate(page_urls, 1):
+        try:
+            links = extract_recipient_links(page_url, session)
+            logger.info("Page %d/%d → %d recipient links", i, total_pages, len(links))
+            all_links.extend(links)
+        except Exception as exc:
+            logger.error("Failed to scrape listing page %s: %s", page_url, exc)
 
     # De-duplicate while preserving order
     seen: set[str] = set()
@@ -278,7 +370,7 @@ def main() -> None:
         unique_links = unique_links[: args.limit]
         logger.info("Limiting to %d recipients", args.limit)
 
-    # 3. Scrape each recipient
+    # 3. Scrape each recipient detail page
     recipients: list[dict] = []
     for i, link in enumerate(unique_links, 1):
         logger.info("[%d/%d] Scraping %s", i, len(unique_links), link)
@@ -292,7 +384,15 @@ def main() -> None:
         except Exception as exc:
             logger.error("Failed to scrape %s: %s", link, exc)
 
-    # 4. Write output
+        # Save progress every 100 recipients
+        if i % 100 == 0:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as fh:
+                json.dump(recipients, fh, indent=2, ensure_ascii=False)
+            logger.info("Progress saved: %d recipients", len(recipients))
+
+    # 4. Write final output
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as fh:
