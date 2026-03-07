@@ -13,6 +13,8 @@ Uses the supabase-py client with credentials from .env.local.
 Supports --dry-run mode to preview operations without writing.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import logging
@@ -274,7 +276,7 @@ def main() -> None:
     else:
         logger.warning("Env file not found: %s — falling back to environment", env_path)
 
-    supabase_url = os.environ.get("SUPABASE_URL", "")
+    supabase_url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "") or os.environ.get("SUPABASE_URL", "")
     supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", "")
 
     if not supabase_url or not supabase_key:

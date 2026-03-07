@@ -8,6 +8,7 @@ from the Wikipedia API.
 
 Output: data/medal_of_honor_recipients.json
 """
+from __future__ import annotations
 
 import argparse
 import json

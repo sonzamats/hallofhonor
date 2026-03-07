@@ -18,6 +18,7 @@ Outputs:
   - data/master_recipients.json   (deduplicated master list)
   - data/flagged_for_review.json  (low-confidence matches)
 """
+from __future__ import annotations
 
 import argparse
 import json
