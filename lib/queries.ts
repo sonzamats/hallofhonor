@@ -247,7 +247,12 @@ export async function getStateSummary(stateCode: string) {
     state: stateCode,
     totalRecipients: recipients.length,
     awardBreakdown,
-    topRecipients: recipients.slice(0, 5),
+    topRecipients: recipients.map((r) => ({
+      id: r.id,
+      full_name: r.full_name,
+      rank: r.rank,
+      branch: r.branch,
+    })),
   };
 }
 
