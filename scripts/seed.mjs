@@ -349,7 +349,7 @@ async function linkAwards(slugToId, dbRecipients, originalRecipients) {
     const batch = rows.slice(i, i + BATCH);
     const { data, error } = await supabase
       .from('recipient_awards')
-      .upsert(batch, { onConflict: 'recipient_id,award_id' })
+      .insert(batch)
       .select('id');
 
     if (error) {
