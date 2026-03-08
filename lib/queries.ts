@@ -1,8 +1,8 @@
-import { supabase } from './supabase';
+import { getSupabase } from './supabase';
 import type { Award, Recipient, RecipientWithAwards } from './supabase';
 
 export async function getAwards(): Promise<Award[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('awards')
     .select('*')
     .order('precedence_rank', { ascending: true });
@@ -11,7 +11,7 @@ export async function getAwards(): Promise<Award[]> {
 }
 
 export async function getAwardBySlug(slug: string): Promise<Award | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('awards')
     .select('*')
     .eq('slug', slug)
@@ -75,7 +75,7 @@ export async function getRecipients(params: {
 }
 
 export async function getRecipientById(id: string): Promise<RecipientWithAwards | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('recipients')
     .select(`
       *,
@@ -134,7 +134,7 @@ export async function getAwardStats(slug: string) {
   const award = await getAwardBySlug(slug);
   if (!award) return null;
 
-  const { data: recipientAwards } = await supabase
+  const { data: recipientAwards } = await getSupabase()
     .from('recipient_awards')
     .select('*, recipients(*)')
     .eq('award_id', award.id);
@@ -167,7 +167,7 @@ export async function getAwardStats(slug: string) {
 }
 
 export async function getStateSummary(stateCode: string) {
-  const { data: recipients, count } = await supabase
+  const { data: recipients, count } = await getSupabase()
     .from('recipients')
     .select('*', { count: 'exact' })
     .eq('entered_service_state', stateCode);
@@ -175,7 +175,7 @@ export async function getStateSummary(stateCode: string) {
   if (!recipients) return null;
 
   const recipientIds = recipients.map((r) => r.id);
-  const { data: recipientAwards } = await supabase
+  const { data: recipientAwards } = await getSupabase()
     .from('recipient_awards')
     .select('*, awards(*)')
     .in('recipient_id', recipientIds);
