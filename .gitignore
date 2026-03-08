@@ -36,6 +36,5 @@ next-env.d.ts
 __pycache__/
 *.pyc
 
-# data outputs
-data/*.json
-!data/awards_seed.json
+# data outputs (keep seed files)
+data/flagged_for_review.json
