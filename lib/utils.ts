@@ -55,6 +55,28 @@ export function classNames(...classes: (string | boolean | undefined | null)[]):
   return classes.filter(Boolean).join(' ');
 }
 
+/**
+ * Fetch all rows from a Supabase query by paginating through results.
+ * Supabase/PostgREST may cap responses at db_max_rows (default 1000),
+ * so this fetches in batches using .range() to get everything.
+ */
+export async function fetchAllRows<T>(
+  buildQuery: () => { range: (from: number, to: number) => Promise<{ data: T[] | null; error: any }> },
+  pageSize = 1000
+): Promise<T[]> {
+  const all: T[] = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await buildQuery().range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+  return all;
+}
+
 const STATE_CODE_TO_NAME: Record<string, string> = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
   CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',

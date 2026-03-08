@@ -1,6 +1,21 @@
 import { getSupabase } from './supabase';
 import type { Award, Recipient, RecipientWithAwards } from './supabase';
-import { extractStateCode, stateCodeToName } from './utils';
+import { extractStateCode, stateCodeToName, fetchAllRows } from './utils';
+
+/**
+ * Build an `.or()` filter string that precisely matches a state.
+ * Uses end-anchored ILIKE to avoid over-matching (e.g. "Virginia" vs "West Virginia").
+ * PostgREST double-quoting handles commas in ILIKE patterns.
+ */
+function stateOrFilter(stateCode: string): string | null {
+  const stateName = stateCodeToName(stateCode);
+  if (stateName === stateCode) return null; // unknown code
+  return [
+    `entered_service_state.eq.${stateCode}`,
+    `entered_service_state.eq.${stateName}`,
+    `entered_service_state.ilike."%, ${stateName}"`,
+  ].join(',');
+}
 
 export async function getAwards(): Promise<Award[]> {
   const { data, error } = await getSupabase()
@@ -39,11 +54,9 @@ export async function getRecipients(params: {
   let query = getSupabase().from('recipients').select('*', { count: 'exact' });
 
   if (params.state) {
-    // Support both 2-letter codes and full state names in the DB
-    const stateName = stateCodeToName(params.state);
-    if (stateName !== params.state) {
-      // It's a valid 2-letter code; match either the code or full name
-      query = query.or(`entered_service_state.eq.${params.state},entered_service_state.ilike.%${stateName}%`);
+    const orFilter = stateOrFilter(params.state);
+    if (orFilter) {
+      query = query.or(orFilter);
     } else {
       query = query.eq('entered_service_state', params.state);
     }
@@ -127,9 +140,9 @@ export async function searchRecipients(params: {
   if (params.branch) query = query.eq('branch', params.branch);
   if (params.conflict) query = query.eq('conflict', params.conflict);
   if (params.state) {
-    const stateName = stateCodeToName(params.state);
-    if (stateName !== params.state) {
-      query = query.or(`entered_service_state.eq.${params.state},entered_service_state.ilike.%${stateName}%`);
+    const orFilter = stateOrFilter(params.state);
+    if (orFilter) {
+      query = query.or(orFilter);
     } else {
       query = query.eq('entered_service_state', params.state);
     }
@@ -170,7 +183,10 @@ export async function getAwardStats(slug: string) {
     const r = (ra as any).recipients as Recipient;
     if (r?.conflict) byConflict[r.conflict] = (byConflict[r.conflict] ?? 0) + 1;
     if (r?.branch) byBranch[r.branch] = (byBranch[r.branch] ?? 0) + 1;
-    if (r?.entered_service_state) byState[r.entered_service_state] = (byState[r.entered_service_state] ?? 0) + 1;
+    if (r?.entered_service_state) {
+      const sc = extractStateCode(r.entered_service_state);
+      if (sc) byState[sc] = (byState[sc] ?? 0) + 1;
+    }
     if (r?.posthumous) posthumousCount++;
     if (ra.with_valor) withValorCount++;
   }
@@ -186,45 +202,50 @@ export async function getAwardStats(slug: string) {
 }
 
 export async function getStateSummary(stateCode: string) {
-  // Try exact match first (works if DB has 2-letter codes)
-  let { data: recipients, count } = await getSupabase()
-    .from('recipients')
-    .select('*', { count: 'exact' })
-    .eq('entered_service_state', stateCode)
-    .limit(10000);
+  const stateName = stateCodeToName(stateCode);
 
-  // If no results, try matching by full state name (works if DB has raw strings)
-  if ((!recipients || recipients.length === 0) && stateCode.length === 2) {
-    const stateName = stateCodeToName(stateCode);
-    if (stateName !== stateCode) {
-      const result = await getSupabase()
-        .from('recipients')
-        .select('*', { count: 'exact' })
-        .ilike('entered_service_state', `%${stateName}%`)
-        .limit(10000);
-      recipients = result.data;
-      count = result.count;
+  // Use ILIKE as a broad filter, then refine with extractStateCode
+  // to avoid over-matching (e.g. "Virginia" matching "West Virginia")
+  const candidates = await fetchAllRows<Recipient>(
+    () => {
+      let q = getSupabase().from('recipients').select('*');
+      if (stateName !== stateCode) {
+        // Broad filter: match code, exact name, or entries containing the name
+        q = q.or(
+          `entered_service_state.eq.${stateCode},entered_service_state.eq.${stateName},entered_service_state.ilike.%${stateName}%`
+        );
+      } else {
+        q = q.eq('entered_service_state', stateCode);
+      }
+      return q as any;
     }
-  }
+  );
 
-  if (!recipients || recipients.length === 0) return null;
+  // Precise filter using the same logic as the map-data API
+  const recipients = candidates.filter((r) => {
+    const code = extractStateCode(r.entered_service_state);
+    return code === stateCode;
+  });
+
+  if (recipients.length === 0) return null;
 
   const recipientIds = recipients.map((r) => r.id);
-  const { data: recipientAwards } = await getSupabase()
-    .from('recipient_awards')
-    .select('*, awards(*)')
-    .in('recipient_id', recipientIds)
-    .limit(10000);
+  const recipientAwards = await fetchAllRows<any>(
+    () => getSupabase()
+      .from('recipient_awards')
+      .select('*, awards(*)')
+      .in('recipient_id', recipientIds) as any
+  );
 
   const awardBreakdown: Record<string, number> = {};
-  for (const ra of recipientAwards ?? []) {
-    const slug = (ra as any).awards?.slug;
+  for (const ra of recipientAwards) {
+    const slug = ra.awards?.slug;
     if (slug) awardBreakdown[slug] = (awardBreakdown[slug] ?? 0) + 1;
   }
 
   return {
     state: stateCode,
-    totalRecipients: count ?? 0,
+    totalRecipients: recipients.length,
     awardBreakdown,
     topRecipients: recipients.slice(0, 5),
   };
@@ -246,9 +267,9 @@ export async function getLeaderboard(params: {
   if (params.conflict) query = query.eq('conflict', params.conflict);
   if (params.branch) query = query.eq('branch', params.branch);
   if (params.state) {
-    const stateName = stateCodeToName(params.state);
-    if (stateName !== params.state) {
-      query = query.or(`entered_service_state.eq.${params.state},entered_service_state.ilike.%${stateName}%`);
+    const orFilter = stateOrFilter(params.state);
+    if (orFilter) {
+      query = query.or(orFilter);
     } else {
       query = query.eq('entered_service_state', params.state);
     }
