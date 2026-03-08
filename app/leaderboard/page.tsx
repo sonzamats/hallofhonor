@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
 import { CONFLICTS, BRANCHES, US_STATES } from '@/lib/awards-config';
 import AwardBadge from '@/components/awards/AwardBadge';
 
@@ -147,17 +146,15 @@ export default function LeaderboardPage() {
             {entries.map((entry, index) => {
               const isTop3 = index < 3;
               return (
-                <motion.a
+                <a
                   key={entry.id}
                   href={`/recipient/${entry.id}`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.02, duration: 0.3 }}
-                  className={`group grid grid-cols-12 items-center gap-4 rounded-lg border px-4 py-3 transition-colors ${
+                  className={`group grid grid-cols-12 items-center gap-4 rounded-lg border px-4 py-3 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 ${
                     isTop3
                       ? 'border-gold-500/20 bg-gold-500/5 hover:border-gold-500/40 hover:bg-gold-500/10'
                       : 'border-navy-800 bg-navy-900/50 hover:border-navy-700 hover:bg-navy-900/80'
                   }`}
+                  style={{ animationDelay: `${index * 20}ms`, animationFillMode: 'both' }}
                 >
                   {/* Rank */}
                   <div className="col-span-2 sm:col-span-1">
@@ -214,7 +211,7 @@ export default function LeaderboardPage() {
                     </span>
                     <p className="text-xs text-text-muted">points</p>
                   </div>
-                </motion.a>
+                </a>
               );
             })}
           </div>

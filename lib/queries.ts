@@ -137,7 +137,8 @@ export async function getAwardStats(slug: string) {
   const { data: recipientAwards } = await getSupabase()
     .from('recipient_awards')
     .select('*, recipients(*)')
-    .eq('award_id', award.id);
+    .eq('award_id', award.id)
+    .limit(10000);
 
   const records = recipientAwards ?? [];
 
@@ -167,10 +168,12 @@ export async function getAwardStats(slug: string) {
 }
 
 export async function getStateSummary(stateCode: string) {
+  // Use count: 'exact' for the total, but limit returned rows
   const { data: recipients, count } = await getSupabase()
     .from('recipients')
     .select('*', { count: 'exact' })
-    .eq('entered_service_state', stateCode);
+    .eq('entered_service_state', stateCode)
+    .limit(10000);
 
   if (!recipients) return null;
 
@@ -178,7 +181,8 @@ export async function getStateSummary(stateCode: string) {
   const { data: recipientAwards } = await getSupabase()
     .from('recipient_awards')
     .select('*, awards(*)')
-    .in('recipient_id', recipientIds);
+    .in('recipient_id', recipientIds)
+    .limit(10000);
 
   const awardBreakdown: Record<string, number> = {};
   for (const ra of recipientAwards ?? []) {
@@ -204,7 +208,8 @@ export async function getLeaderboard(params: {
 
   let query = getSupabase()
     .from('recipients')
-    .select('*, recipient_awards(*, awards(*))');
+    .select('*, recipient_awards(*, awards(*))')
+    .limit(10000);
 
   if (params.conflict) query = query.eq('conflict', params.conflict);
   if (params.branch) query = query.eq('branch', params.branch);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AWARDS } from '@/lib/awards-config';
 
@@ -12,6 +12,17 @@ interface StatePanelProps {
   activeAward: string | null;
 }
 
+interface StateSummary {
+  totalRecipients: number;
+  awardBreakdown: Record<string, number>;
+  topRecipients: {
+    id: string;
+    full_name: string;
+    rank: string | null;
+    branch: string | null;
+  }[];
+}
+
 export default function StatePanel({
   stateName,
   stateCode,
@@ -21,6 +32,22 @@ export default function StatePanel({
 }: StatePanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const [data, setData] = useState<StateSummary | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch state data when panel opens
+  useEffect(() => {
+    if (!isOpen || !stateCode) {
+      setData(null);
+      return;
+    }
+    setLoading(true);
+    fetch(`/api/state/${stateCode}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => setData(d))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [isOpen, stateCode]);
 
   // Focus trap and Escape key
   const handleKeyDown = useCallback(
@@ -30,7 +57,6 @@ export default function StatePanel({
         return;
       }
 
-      // Basic focus trap
       if (e.key === 'Tab' && panelRef.current) {
         const focusable = panelRef.current.querySelectorAll<HTMLElement>(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -55,7 +81,6 @@ export default function StatePanel({
   useEffect(() => {
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
-      // Focus the close button when panel opens
       requestAnimationFrame(() => {
         closeButtonRef.current?.focus();
       });
@@ -63,7 +88,6 @@ export default function StatePanel({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, handleKeyDown]);
 
-  // Prevent body scroll when panel is open on mobile
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -75,13 +99,12 @@ export default function StatePanel({
     };
   }, [isOpen]);
 
-  const totalDecorations = 0; // Placeholder until data is loaded
+  const totalDecorations = data?.totalRecipients ?? 0;
 
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -106,17 +129,17 @@ export default function StatePanel({
           >
             <PanelContent
               stateName={stateName}
-              stateCode={stateCode}
               totalDecorations={totalDecorations}
               activeAward={activeAward}
               onClose={onClose}
               closeButtonRef={closeButtonRef}
+              data={data}
+              loading={loading}
             />
           </motion.div>
 
           {/* Mobile: Bottom sheet */}
           <motion.div
-            ref={!panelRef.current ? panelRef : undefined}
             role="dialog"
             aria-label={`${stateName} award details`}
             aria-modal="true"
@@ -128,24 +151,21 @@ export default function StatePanel({
             dragConstraints={{ top: 0 }}
             dragElastic={0.2}
             onDragEnd={(_, info) => {
-              if (info.offset.y > 100) {
-                onClose();
-              }
+              if (info.offset.y > 100) onClose();
             }}
             className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border-t border-navy-700/50 bg-navy-900 shadow-2xl md:hidden"
           >
-            {/* Drag handle */}
             <div className="flex justify-center py-3">
               <div className="h-1 w-10 rounded-full bg-navy-600" />
             </div>
-
             <PanelContent
               stateName={stateName}
-              stateCode={stateCode}
               totalDecorations={totalDecorations}
               activeAward={activeAward}
               onClose={onClose}
               closeButtonRef={closeButtonRef}
+              data={data}
+              loading={loading}
             />
           </motion.div>
         </>
@@ -160,20 +180,22 @@ export default function StatePanel({
 
 interface PanelContentProps {
   stateName: string;
-  stateCode: string;
   totalDecorations: number;
   activeAward: string | null;
   onClose: () => void;
   closeButtonRef: React.RefObject<HTMLButtonElement | null>;
+  data: StateSummary | null;
+  loading: boolean;
 }
 
 function PanelContent({
   stateName,
-  stateCode,
   totalDecorations,
   activeAward,
   onClose,
   closeButtonRef,
+  data,
+  loading,
 }: PanelContentProps) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -183,10 +205,9 @@ function PanelContent({
           {stateName}
         </h2>
         <p className="mt-1 font-body text-sm text-text-muted">
-          {totalDecorations.toLocaleString()} total decorations
+          {totalDecorations.toLocaleString()} total recipients
         </p>
 
-        {/* Close button */}
         <button
           ref={closeButtonRef}
           onClick={onClose}
@@ -233,16 +254,44 @@ function PanelContent({
 
       {/* Recipient list */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        <p className="font-body text-sm text-text-muted">
-          Loading recipients...
-        </p>
+        {loading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-12 animate-pulse rounded-lg bg-navy-800/50"
+              />
+            ))}
+          </div>
+        ) : !data || data.topRecipients.length === 0 ? (
+          <p className="font-body text-sm text-text-muted">
+            No recipients found for this state.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {data.topRecipients.map((r) => (
+              <a
+                key={r.id}
+                href={`/recipient/${r.id}`}
+                className="block rounded-lg border border-navy-800 bg-navy-800/30 px-4 py-3 transition-colors hover:border-navy-700 hover:bg-navy-800/60"
+              >
+                <p className="font-display text-sm font-semibold text-cream">
+                  {r.full_name}
+                </p>
+                <p className="text-xs text-text-muted">
+                  {[r.rank, r.branch].filter(Boolean).join(' — ')}
+                </p>
+              </a>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Small tab pill used inside the panel                                */
+/* Small tab pill                                                      */
 /* ------------------------------------------------------------------ */
 
 function TabPill({
@@ -256,11 +305,7 @@ function TabPill({
 }) {
   return (
     <button
-      className={`
-        flex-shrink-0 rounded-full px-3 py-1 font-body text-xs font-medium
-        transition-all duration-200
-        focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-1 focus-visible:ring-offset-navy-900
-      `}
+      className="flex-shrink-0 rounded-full px-3 py-1 font-body text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-1 focus-visible:ring-offset-navy-900"
       style={{
         borderWidth: '1.5px',
         borderStyle: 'solid',

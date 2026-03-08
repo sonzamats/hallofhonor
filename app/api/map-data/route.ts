@@ -39,6 +39,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Supabase defaults to 1000 rows; we need all recipients
+    query = query.limit(10000);
+
     const { data, error } = await query;
     if (error) throw error;
 
