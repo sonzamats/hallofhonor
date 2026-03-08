@@ -81,7 +81,7 @@ function USMapInner({
 }: USMapProps) {
   // Compute the max value and tier thresholds
   const { maxCount, getColor } = useMemo(() => {
-    const values = Object.values(stateData);
+    const values = Object.values(stateData || {});
     const max = values.length > 0 ? Math.max(...values) : 0;
 
     // 5-tier heat scale: 0%, 25%, 50%, 75%, 100%

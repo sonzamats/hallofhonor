@@ -80,7 +80,7 @@ function CompareContent() {
     fetchComparison();
   }, [selectedState1, selectedState2]);
 
-  const sortedStates = Object.entries(US_STATES).sort(([, a], [, b]) =>
+  const sortedStates = Object.entries(US_STATES || {}).sort(([, a], [, b]) =>
     a.localeCompare(b)
   );
 

@@ -311,7 +311,7 @@ export default function SearchPage() {
                       className="w-full rounded-md border border-navy-700 bg-navy-800 px-3 py-2 text-sm text-cream focus:border-gold-400 focus:outline-none"
                     >
                       <option value="">All States</option>
-                      {Object.entries(US_STATES)
+                      {Object.entries(US_STATES || {})
                         .sort(([, a], [, b]) => a.localeCompare(b))
                         .map(([code, name]) => (
                           <option key={code} value={code}>

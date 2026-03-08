@@ -14,16 +14,6 @@ export function getSupabase(): SupabaseClient {
   return _supabase;
 }
 
-/** @deprecated Use getSupabase() instead */
-export const supabase = typeof process !== 'undefined' &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== 'your-supabase-url'
-  ? createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-  : (null as unknown as SupabaseClient);
-
 export function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_KEY;
