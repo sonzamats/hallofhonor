@@ -55,19 +55,66 @@ export function classNames(...classes: (string | boolean | undefined | null)[]):
   return classes.filter(Boolean).join(' ');
 }
 
+const STATE_CODE_TO_NAME: Record<string, string> = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
+  MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+  NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+  OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+  SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+  VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+  DC: 'District of Columbia', PR: 'Puerto Rico', GU: 'Guam', AS: 'American Samoa', VI: 'U.S. Virgin Islands',
+};
+
+const STATE_NAME_TO_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(STATE_CODE_TO_NAME).map(([code, name]) => [name.toLowerCase(), code])
+);
+
+const VALID_STATE_CODES = new Set(Object.keys(STATE_CODE_TO_NAME));
+
 export function stateCodeToName(code: string): string {
-  const states: Record<string, string> = {
-    AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
-    CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
-    HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
-    KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
-    MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
-    MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
-    NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
-    OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
-    SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
-    VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
-    DC: 'District of Columbia',
-  };
-  return states[code] ?? code;
+  return STATE_CODE_TO_NAME[code] ?? code;
+}
+
+/**
+ * Extract a 2-letter state code from a location string.
+ * Handles: "CA", "California", "San Francisco, California",
+ * "Terre Haute, Vigo County, Indiana", etc.
+ */
+export function extractStateCode(location: string | null): string | null {
+  if (!location) return null;
+  const trimmed = location.trim();
+
+  // Already a 2-letter code
+  if (trimmed.length === 2) {
+    const upper = trimmed.toUpperCase();
+    if (VALID_STATE_CODES.has(upper)) return upper;
+  }
+
+  const lower = trimmed.toLowerCase();
+
+  // Try matching parts from right to left (most specific last)
+  const parts = lower.split(',').map((p) => p.trim());
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]
+      .replace(/,?\s*(united states|usa|u\.s\.a\.)$/i, '')
+      .trim();
+    // Check full state name match
+    if (STATE_NAME_TO_CODE[part]) return STATE_NAME_TO_CODE[part];
+    // Check if it's a 2-letter code
+    if (part.length === 2) {
+      const upper = part.toUpperCase();
+      if (VALID_STATE_CODES.has(upper)) return upper;
+    }
+  }
+
+  // Fallback: search for any state name anywhere in the string
+  for (const [name, code] of Object.entries(STATE_NAME_TO_CODE)) {
+    if (lower.includes(name)) return code;
+  }
+
+  return null;
 }

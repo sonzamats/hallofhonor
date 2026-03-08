@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
+import { extractStateCode } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,12 +47,15 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
     if (error) throw error;
 
-    // Aggregate counts by state
+    // Aggregate counts by normalized 2-letter state code
     const stateCounts: Record<string, number> = {};
     for (const row of data ?? []) {
-      const st = row.entered_service_state;
-      if (st) {
-        stateCounts[st] = (stateCounts[st] ?? 0) + 1;
+      const raw = row.entered_service_state;
+      if (!raw) continue;
+      // Handle both 2-letter codes and full location strings
+      const code = extractStateCode(raw);
+      if (code) {
+        stateCounts[code] = (stateCounts[code] ?? 0) + 1;
       }
     }
 

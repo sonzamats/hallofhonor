@@ -1,5 +1,6 @@
 import { getSupabase } from './supabase';
 import type { Award, Recipient, RecipientWithAwards } from './supabase';
+import { extractStateCode, stateCodeToName } from './utils';
 
 export async function getAwards(): Promise<Award[]> {
   const { data, error } = await getSupabase()
@@ -37,7 +38,16 @@ export async function getRecipients(params: {
 
   let query = getSupabase().from('recipients').select('*', { count: 'exact' });
 
-  if (params.state) query = query.eq('entered_service_state', params.state);
+  if (params.state) {
+    // Support both 2-letter codes and full state names in the DB
+    const stateName = stateCodeToName(params.state);
+    if (stateName !== params.state) {
+      // It's a valid 2-letter code; match either the code or full name
+      query = query.or(`entered_service_state.eq.${params.state},entered_service_state.ilike.%${stateName}%`);
+    } else {
+      query = query.eq('entered_service_state', params.state);
+    }
+  }
   if (params.conflict) query = query.eq('conflict', params.conflict);
   if (params.branch) query = query.eq('branch', params.branch);
   if (params.posthumous !== undefined) query = query.eq('posthumous', params.posthumous);
@@ -116,7 +126,14 @@ export async function searchRecipients(params: {
 
   if (params.branch) query = query.eq('branch', params.branch);
   if (params.conflict) query = query.eq('conflict', params.conflict);
-  if (params.state) query = query.eq('entered_service_state', params.state);
+  if (params.state) {
+    const stateName = stateCodeToName(params.state);
+    if (stateName !== params.state) {
+      query = query.or(`entered_service_state.eq.${params.state},entered_service_state.ilike.%${stateName}%`);
+    } else {
+      query = query.eq('entered_service_state', params.state);
+    }
+  }
   if (params.posthumous !== undefined) query = query.eq('posthumous', params.posthumous);
   if (params.pow !== undefined) query = query.eq('pow', params.pow);
 
@@ -169,14 +186,28 @@ export async function getAwardStats(slug: string) {
 }
 
 export async function getStateSummary(stateCode: string) {
-  // Use count: 'exact' for the total, but limit returned rows
-  const { data: recipients, count } = await getSupabase()
+  // Try exact match first (works if DB has 2-letter codes)
+  let { data: recipients, count } = await getSupabase()
     .from('recipients')
     .select('*', { count: 'exact' })
     .eq('entered_service_state', stateCode)
     .limit(10000);
 
-  if (!recipients) return null;
+  // If no results, try matching by full state name (works if DB has raw strings)
+  if ((!recipients || recipients.length === 0) && stateCode.length === 2) {
+    const stateName = stateCodeToName(stateCode);
+    if (stateName !== stateCode) {
+      const result = await getSupabase()
+        .from('recipients')
+        .select('*', { count: 'exact' })
+        .ilike('entered_service_state', `%${stateName}%`)
+        .limit(10000);
+      recipients = result.data;
+      count = result.count;
+    }
+  }
+
+  if (!recipients || recipients.length === 0) return null;
 
   const recipientIds = recipients.map((r) => r.id);
   const { data: recipientAwards } = await getSupabase()
@@ -214,7 +245,14 @@ export async function getLeaderboard(params: {
 
   if (params.conflict) query = query.eq('conflict', params.conflict);
   if (params.branch) query = query.eq('branch', params.branch);
-  if (params.state) query = query.eq('entered_service_state', params.state);
+  if (params.state) {
+    const stateName = stateCodeToName(params.state);
+    if (stateName !== params.state) {
+      query = query.or(`entered_service_state.eq.${params.state},entered_service_state.ilike.%${stateName}%`);
+    } else {
+      query = query.eq('entered_service_state', params.state);
+    }
+  }
 
   const { data, error } = await query;
   if (error) throw error;
