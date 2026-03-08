@@ -44,13 +44,13 @@ export async function getRecipients(params: {
   if (params.pow !== undefined) query = query.eq('pow', params.pow);
 
   if (params.award) {
-    const { data: awardData } = await supabase
+    const { data: awardData } = await getSupabase()
       .from('awards')
       .select('id')
       .eq('slug', params.award)
       .single();
     if (awardData) {
-      const { data: recipientIds } = await supabase
+      const { data: recipientIds } = await getSupabase()
         .from('recipient_awards')
         .select('recipient_id')
         .eq('award_id', awardData.id);

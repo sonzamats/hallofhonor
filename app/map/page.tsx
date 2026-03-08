@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { AWARDS, US_STATES, getAwardColor } from '@/lib/awards-config';
 import USMap from '@/components/map/USMap';
 import AwardSelector from '@/components/map/AwardSelector';
@@ -21,8 +21,16 @@ export default function MapPage() {
     name: string;
   } | null>(null);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [stateData, setStateData] = useState<Record<string, number>>({});
 
-  const stateData: Record<string, number> = useMemo(() => ({}), []);
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (activeAward) params.set('award', activeAward);
+    fetch(`/api/map-data?${params.toString()}`)
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((data) => setStateData(data))
+      .catch(() => setStateData({}));
+  }, [activeAward]);
 
   const awardColor = activeAward ? getAwardColor(activeAward) : '#c9a84c';
 
@@ -69,7 +77,7 @@ export default function MapPage() {
     : 'All Awards';
 
   return (
-    <div className="relative flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-navy-950">
+    <div className="relative flex min-h-[calc(100vh-4rem)] flex-col overflow-auto bg-navy-950">
       <div className="shrink-0 border-b border-navy-800 bg-navy-900/80 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 py-3">
           <h1 className="mb-2 font-display text-xl font-bold text-cream sm:text-2xl">
