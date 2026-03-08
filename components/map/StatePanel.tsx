@@ -10,6 +10,7 @@ interface StatePanelProps {
   isOpen: boolean;
   onClose: () => void;
   activeAward: string | null;
+  onAwardSelect?: (slug: string | null) => void;
 }
 
 interface StateSummary {
@@ -29,6 +30,7 @@ export default function StatePanel({
   isOpen,
   onClose,
   activeAward,
+  onAwardSelect,
 }: StatePanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -135,6 +137,7 @@ export default function StatePanel({
               closeButtonRef={closeButtonRef}
               data={data}
               loading={loading}
+              onAwardSelect={onAwardSelect}
             />
           </motion.div>
 
@@ -166,6 +169,7 @@ export default function StatePanel({
               closeButtonRef={closeButtonRef}
               data={data}
               loading={loading}
+              onAwardSelect={onAwardSelect}
             />
           </motion.div>
         </>
@@ -186,6 +190,7 @@ interface PanelContentProps {
   closeButtonRef: React.RefObject<HTMLButtonElement | null>;
   data: StateSummary | null;
   loading: boolean;
+  onAwardSelect?: (slug: string | null) => void;
 }
 
 function PanelContent({
@@ -196,6 +201,7 @@ function PanelContent({
   closeButtonRef,
   data,
   loading,
+  onAwardSelect,
 }: PanelContentProps) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -240,6 +246,7 @@ function PanelContent({
             label="All"
             isActive={activeAward === null}
             colorHex="#c9a84c"
+            onClick={() => onAwardSelect?.(null)}
           />
           {AWARDS.map((award) => (
             <TabPill
@@ -247,6 +254,7 @@ function PanelContent({
               label={award.shortName}
               isActive={activeAward === award.slug}
               colorHex={award.colorHex}
+              onClick={() => onAwardSelect?.(award.slug)}
             />
           ))}
         </div>
@@ -298,13 +306,16 @@ function TabPill({
   label,
   isActive,
   colorHex,
+  onClick,
 }: {
   label: string;
   isActive: boolean;
   colorHex: string;
+  onClick?: () => void;
 }) {
   return (
     <button
+      onClick={onClick}
       className="flex-shrink-0 rounded-full px-3 py-1 font-body text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-1 focus-visible:ring-offset-navy-900"
       style={{
         borderWidth: '1.5px',

@@ -118,6 +118,7 @@ export default function MapPage() {
         isOpen={selectedState !== null}
         onClose={handlePanelClose}
         activeAward={activeAward}
+        onAwardSelect={handleAwardSelect}
       />
     </div>
   );

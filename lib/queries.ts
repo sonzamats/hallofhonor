@@ -53,7 +53,8 @@ export async function getRecipients(params: {
       const { data: recipientIds } = await getSupabase()
         .from('recipient_awards')
         .select('recipient_id')
-        .eq('award_id', awardData.id);
+        .eq('award_id', awardData.id)
+        .limit(10000);
       if (recipientIds) {
         query = query.in('id', recipientIds.map((r) => r.recipient_id));
       }

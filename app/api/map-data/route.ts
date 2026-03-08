@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
         const { data: recipientIds } = await getSupabase()
           .from('recipient_awards')
           .select('recipient_id')
-          .eq('award_id', awardData.id);
+          .eq('award_id', awardData.id)
+          .limit(10000);
 
         if (recipientIds && recipientIds.length > 0) {
           query = query.in(

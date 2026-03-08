@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchRecipients } from '@/lib/queries';
+import { searchRecipients, getRecipients } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,26 +7,45 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
     const q = searchParams.get('q');
+    const page = parseInt(searchParams.get('page') ?? '1', 10);
+    const limit = parseInt(searchParams.get('limit') ?? '20', 10);
 
-    if (!q) {
-      return NextResponse.json({ error: 'Query parameter "q" is required' }, { status: 400 });
-    }
-
+    const branch = searchParams.get('branch') ?? undefined;
+    const conflict = searchParams.get('conflict') ?? undefined;
+    const state = searchParams.get('state') ?? undefined;
+    const posthumous = searchParams.has('posthumous') ? searchParams.get('posthumous') === 'true' : undefined;
+    const pow = searchParams.has('pow') ? searchParams.get('pow') === 'true' : undefined;
     const awardsParam = searchParams.get('awards');
+    const award = awardsParam?.split(',')[0] ?? undefined;
+
+    // If no search query, use the browse/filter endpoint
+    if (!q) {
+      const data = await getRecipients({
+        branch,
+        conflict,
+        state,
+        award,
+        posthumous,
+        pow,
+        page,
+        limit,
+      });
+      return NextResponse.json(
+        { results: data.recipients, total: data.total },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
 
     const data = await searchRecipients({
       q,
       awards: awardsParam ? awardsParam.split(',') : undefined,
-      branch: searchParams.get('branch') ?? undefined,
-      conflict: searchParams.get('conflict') ?? undefined,
-      state: searchParams.get('state') ?? undefined,
-      yearFrom: searchParams.has('yearFrom') ? parseInt(searchParams.get('yearFrom')!, 10) : undefined,
-      yearTo: searchParams.has('yearTo') ? parseInt(searchParams.get('yearTo')!, 10) : undefined,
-      posthumous: searchParams.has('posthumous') ? searchParams.get('posthumous') === 'true' : undefined,
-      pow: searchParams.has('pow') ? searchParams.get('pow') === 'true' : undefined,
-      withValor: searchParams.has('withValor') ? searchParams.get('withValor') === 'true' : undefined,
-      page: parseInt(searchParams.get('page') ?? '1', 10),
-      limit: parseInt(searchParams.get('limit') ?? '20', 10),
+      branch,
+      conflict,
+      state,
+      posthumous,
+      pow,
+      page,
+      limit,
     });
 
     return NextResponse.json(data, {
