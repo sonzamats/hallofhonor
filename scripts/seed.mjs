@@ -265,7 +265,6 @@ async function seedRecipients(recipients) {
       return {
         first_name: rec.first_name || rec.full_name?.split(' ')[0] || 'Unknown',
         last_name: rec.last_name || rec.full_name?.split(' ').slice(-1)[0] || 'Unknown',
-        full_name: rec.full_name || `${rec.first_name || ''} ${rec.last_name || ''}`.trim(),
         rank: rec.rank || null,
         branch: normalizeBranch(rec.branch),
         conflict: normalizeConflict(rec.conflict),
@@ -286,7 +285,7 @@ async function seedRecipients(recipients) {
     });
 
     if (DRY_RUN) {
-      rows.forEach(r => dbRecipients.push({ ...r, id: `dry-${slugify(r.full_name)}` }));
+      rows.forEach(r => dbRecipients.push({ ...r, full_name: `${r.first_name} ${r.last_name}`, id: `dry-${slugify(r.first_name + ' ' + r.last_name)}` }));
       inserted += rows.length;
       continue;
     }
