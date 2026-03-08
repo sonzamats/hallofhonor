@@ -5,7 +5,6 @@ import {
   ComposableMap,
   Geographies,
   Geography,
-  ZoomableGroup,
 } from 'react-simple-maps';
 
 const GEO_URL =
@@ -126,8 +125,7 @@ function USMapInner({
         height={610}
         style={{ width: '100%', height: '100%' }}
       >
-        <ZoomableGroup>
-          <Geographies geography={GEO_URL}>
+        <Geographies geography={GEO_URL}>
             {({ geographies }) =>
               geographies.map((geo) => {
                 const { code, name, count } = resolveState(geo);
@@ -184,7 +182,6 @@ function USMapInner({
               })
             }
           </Geographies>
-        </ZoomableGroup>
       </ComposableMap>
     </div>
   );

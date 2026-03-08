@@ -35,7 +35,7 @@ export async function getRecipients(params: {
   const limit = params.limit ?? 20;
   const offset = (page - 1) * limit;
 
-  let query = supabase.from('recipients').select('*', { count: 'exact' });
+  let query = getSupabase().from('recipients').select('*', { count: 'exact' });
 
   if (params.state) query = query.eq('entered_service_state', params.state);
   if (params.conflict) query = query.eq('conflict', params.conflict);
@@ -108,7 +108,7 @@ export async function searchRecipients(params: {
   const limit = params.limit ?? 20;
   const offset = (page - 1) * limit;
 
-  let query = supabase
+  let query = getSupabase()
     .from('recipients')
     .select('*', { count: 'exact' })
     .textSearch('search_vector', params.q, { type: 'websearch' });
@@ -202,7 +202,7 @@ export async function getLeaderboard(params: {
 }) {
   const limit = params.limit ?? 50;
 
-  let query = supabase
+  let query = getSupabase()
     .from('recipients')
     .select('*, recipient_awards(*, awards(*))');
 
