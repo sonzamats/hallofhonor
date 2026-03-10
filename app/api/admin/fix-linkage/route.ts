@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getServiceClient } from '@/lib/supabase';
 import { fetchAllRows } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET() {
   try {
-    const supabase = getSupabase();
+    const supabase = getServiceClient();
 
     // 1. Get the Medal of Honor award ID
     const { data: mohAward, error: awardErr } = await supabase
@@ -82,7 +82,7 @@ export async function GET() {
 
       const { data, error } = await supabase
         .from('recipient_awards')
-        .upsert(batch, { onConflict: 'recipient_id,award_id' })
+        .insert(batch)
         .select('id');
 
       if (error) {
