@@ -5,10 +5,11 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const recipient = await getRecipientById(params.id);
+    const { id } = await params;
+    const recipient = await getRecipientById(id);
 
     if (!recipient) {
       return NextResponse.json({ error: 'Recipient not found' }, { status: 404 });

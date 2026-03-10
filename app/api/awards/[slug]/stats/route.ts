@@ -5,10 +5,11 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const stats = await getAwardStats(params.slug);
+    const { slug } = await params;
+    const stats = await getAwardStats(slug);
 
     if (!stats) {
       return NextResponse.json({ error: 'Award not found' }, { status: 404 });

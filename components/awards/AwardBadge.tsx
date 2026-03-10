@@ -50,17 +50,19 @@ export default function AwardBadge({
     if (!tooltipVisible) return;
 
     const dismiss = () => setTooltipVisible(false);
-    window.addEventListener('scroll', dismiss, { passive: true });
-    document.addEventListener('pointerdown', (e) => {
+    const handlePointerDown = (e: PointerEvent) => {
       if (
         badgeRef.current &&
         !badgeRef.current.contains(e.target as Node)
       ) {
         dismiss();
       }
-    });
+    };
+    window.addEventListener('scroll', dismiss, { passive: true });
+    document.addEventListener('pointerdown', handlePointerDown);
     return () => {
       window.removeEventListener('scroll', dismiss);
+      document.removeEventListener('pointerdown', handlePointerDown);
     };
   }, [tooltipVisible]);
 
