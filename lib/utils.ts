@@ -59,18 +59,33 @@ export function classNames(...classes: (string | boolean | undefined | null)[]):
  * Fetch all rows from a Supabase query by paginating through results.
  * Supabase/PostgREST may cap responses at db_max_rows (default 1000),
  * so this fetches in batches using .range() to get everything.
+ *
+ * Deduplicates by `id` field (if present) to guard against PostgREST
+ * offset-based pagination returning overlapping rows.
  */
 export async function fetchAllRows<T>(
   buildQuery: () => { range: (from: number, to: number) => Promise<{ data: T[] | null; error: any }> },
   pageSize = 1000
 ): Promise<T[]> {
   const all: T[] = [];
+  const seen = new Set<string>();
   let offset = 0;
   while (true) {
     const { data, error } = await buildQuery().range(offset, offset + pageSize - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
-    all.push(...data);
+    let newCount = 0;
+    for (const row of data) {
+      const id = (row as any).id as string | undefined;
+      if (id) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+      }
+      all.push(row);
+      newCount++;
+    }
+    // Stop if this page yielded zero new rows (all duplicates = wrapped)
+    if (newCount === 0) break;
     if (data.length < pageSize) break;
     offset += pageSize;
   }
