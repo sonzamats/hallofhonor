@@ -180,6 +180,44 @@ function slugify(text) {
     .replace(/^-|-$/g, '');
 }
 
+const NAME_SUFFIXES = new Set(['jr', 'jr.', 'sr', 'sr.', 'ii', 'iii', 'iv', 'v']);
+
+/**
+ * Parse first and last name from a full name, handling suffixes like "Jr", "III".
+ * e.g. "Frank Luke Jr" -> { first: "Frank", last: "Luke" }
+ * e.g. "John Franklin Baker Jr" -> { first: "John", last: "Baker" }
+ */
+function parseNames(rec) {
+  let first = rec.first_name || '';
+  let last = rec.last_name || '';
+  const fullName = rec.full_name || '';
+
+  // If last_name is a suffix, re-parse from full_name
+  if (NAME_SUFFIXES.has(last.toLowerCase().trim())) {
+    const parts = fullName.split(/\s+/).filter(Boolean);
+    // Remove suffix parts from the end
+    while (parts.length > 1 && NAME_SUFFIXES.has(parts[parts.length - 1].toLowerCase().replace('.', ''))) {
+      parts.pop();
+    }
+    if (parts.length >= 2) {
+      first = parts[0];
+      last = parts[parts.length - 1];
+    } else if (parts.length === 1) {
+      first = parts[0];
+      last = 'Unknown';
+    }
+  }
+
+  // Fallback to full_name parsing
+  if (!first && fullName) first = fullName.split(' ')[0];
+  if (!last && fullName) last = fullName.split(' ').slice(-1)[0];
+
+  return {
+    first_name: first || 'Unknown',
+    last_name: last || 'Unknown',
+  };
+}
+
 function parseDate(dateStr) {
   if (!dateStr || !dateStr.trim()) return null;
   const s = dateStr.trim();
@@ -249,11 +287,100 @@ async function seedAwards(awardsData) {
 }
 
 // ---------------------------------------------------------------------------
+// Deduplicate source data
+// ---------------------------------------------------------------------------
+function deduplicateSourceData(recipients) {
+  const seen = new Map();
+  const unique = [];
+
+  for (const rec of recipients) {
+    // Build a dedup key from source_url (most reliable), falling back to
+    // name + branch + conflict + date_of_action
+    const sourceUrl = (rec.source_url || '').toLowerCase().trim();
+    const first = (rec.first_name || rec.full_name?.split(' ')[0] || '').toLowerCase().trim();
+    const last = (rec.last_name || rec.full_name?.split(' ').slice(-1)[0] || '').toLowerCase().trim();
+    const branch = (rec.branch || '').toLowerCase().trim();
+    const conflict = (rec.conflict || '').toLowerCase().trim();
+    const dateAction = (rec.date_of_action || '').toLowerCase().trim();
+
+    // Prefer source_url as dedup key (each CMOHS page is unique per recipient)
+    const key = sourceUrl || `${first}|${last}|${branch}|${conflict}|${dateAction}`;
+
+    if (!seen.has(key)) {
+      seen.set(key, true);
+      unique.push(rec);
+    }
+  }
+
+  const removed = recipients.length - unique.length;
+  if (removed > 0) {
+    console.log(`  Deduplicated source data: removed ${removed} duplicates (${recipients.length} -> ${unique.length})`);
+  }
+  return unique;
+}
+
+// ---------------------------------------------------------------------------
+// Clear existing data (for idempotent re-seeding)
+// ---------------------------------------------------------------------------
+async function clearExistingData() {
+  if (DRY_RUN) {
+    console.log('\n  [DRY RUN] Would clear recipient_awards and recipients tables');
+    return;
+  }
+
+  console.log('\n  Clearing existing recipient_awards...');
+  // Delete all recipient_awards links first (foreign key dependency)
+  let offset = 0;
+  const PAGE = 1000;
+  while (true) {
+    const { data } = await supabase
+      .from('recipient_awards')
+      .select('id')
+      .range(offset, offset + PAGE - 1);
+    if (!data || data.length === 0) break;
+    const ids = data.map(r => r.id);
+    const { error } = await supabase
+      .from('recipient_awards')
+      .delete()
+      .in('id', ids);
+    if (error) {
+      console.error('  Error clearing recipient_awards:', error.message);
+      break;
+    }
+    process.stdout.write('.');
+  }
+
+  console.log('\n  Clearing existing recipients...');
+  while (true) {
+    const { data } = await supabase
+      .from('recipients')
+      .select('id')
+      .range(0, PAGE - 1);
+    if (!data || data.length === 0) break;
+    const ids = data.map(r => r.id);
+    const { error } = await supabase
+      .from('recipients')
+      .delete()
+      .in('id', ids);
+    if (error) {
+      console.error('  Error clearing recipients:', error.message);
+      break;
+    }
+    process.stdout.write('.');
+  }
+  console.log('\n  Tables cleared.');
+}
+
+// ---------------------------------------------------------------------------
 // Seed recipients
 // ---------------------------------------------------------------------------
 async function seedRecipients(recipients) {
   // Filter out scraping artifacts (e.g., nav text captured as records)
   recipients = recipients.filter(r => r.full_name && !r.full_name.includes('Questions?'));
+
+  // Deduplicate source data before inserting
+  recipients = deduplicateSourceData(recipients);
+
   console.log(`\nSeeding ${recipients.length} recipients...`);
   const BATCH = 50;
   let inserted = 0;
@@ -264,9 +391,10 @@ async function seedRecipients(recipients) {
     const batch = recipients.slice(i, i + BATCH);
     const rows = batch.map(rec => {
       const stateCode = extractStateCode(rec.entered_service_state);
+      const { first_name, last_name } = parseNames(rec);
       return {
-        first_name: rec.first_name || rec.full_name?.split(' ')[0] || 'Unknown',
-        last_name: rec.last_name || rec.full_name?.split(' ').slice(-1)[0] || 'Unknown',
+        first_name,
+        last_name,
         rank: rec.rank || null,
         branch: normalizeBranch(rec.branch),
         conflict: normalizeConflict(rec.conflict),
@@ -402,6 +530,9 @@ async function main() {
   const recipientsData = loadJSON('master_recipients.json');
 
   console.log(`Loaded ${awardsData.length} awards, ${recipientsData.length} recipients`);
+
+  // 0. Clear existing data for idempotent re-seeding
+  await clearExistingData();
 
   // 1. Seed awards
   const slugToId = await seedAwards(awardsData);

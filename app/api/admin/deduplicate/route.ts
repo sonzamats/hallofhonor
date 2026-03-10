@@ -29,17 +29,20 @@ export async function GET(request: Request) {
       rank: string | null;
       branch: string | null;
       conflict: string | null;
+      date_of_action: string | null;
       citation: string | null;
       created_at: string;
     }>(
       () =>
         supabase
           .from('recipients')
-          .select('id, first_name, last_name, rank, branch, conflict, citation, created_at')
+          .select('id, first_name, last_name, rank, branch, conflict, date_of_action, citation, created_at')
           .order('created_at', { ascending: true }) as any
     );
 
-    // 2. Group exact duplicates (name + citation first 100 chars)
+    // 2. Group duplicates using multiple strategies:
+    //    - Primary: name + citation first 100 chars (strongest signal)
+    //    - Secondary: name + branch + conflict + date_of_action (for records without citations)
     const groups = new Map<
       string,
       Array<{
@@ -51,11 +54,21 @@ export async function GET(request: Request) {
     >();
 
     for (const r of allRecipients) {
-      const key = [
-        r.first_name.toLowerCase().trim(),
-        r.last_name.toLowerCase().trim(),
-        (r.citation || '').slice(0, 100).toLowerCase().trim(),
-      ].join('|');
+      // Use citation-based key when citation exists, otherwise fall back to
+      // name + branch + conflict + date_of_action
+      const key = r.citation
+        ? [
+            r.first_name.toLowerCase().trim(),
+            r.last_name.toLowerCase().trim(),
+            (r.citation || '').slice(0, 100).toLowerCase().trim(),
+          ].join('|')
+        : [
+            r.first_name.toLowerCase().trim(),
+            r.last_name.toLowerCase().trim(),
+            (r.branch || '').toLowerCase().trim(),
+            (r.conflict || '').toLowerCase().trim(),
+            (r.date_of_action || '').toLowerCase().trim(),
+          ].join('|');
 
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(r);

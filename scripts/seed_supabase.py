@@ -58,6 +58,35 @@ def slugify(text: str) -> str:
     return re.sub(r"-+", "-", s).strip("-")
 
 
+_NAME_SUFFIXES = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"}
+
+
+def parse_names(rec: dict) -> tuple[str, str]:
+    """Parse first and last name, handling suffixes like Jr, III.
+
+    e.g. full_name='Frank Luke Jr' -> ('Frank', 'Luke')
+    """
+    first = rec.get("first_name", "")
+    last = rec.get("last_name", "")
+    full_name = rec.get("full_name", "")
+
+    if last.lower().strip() in _NAME_SUFFIXES:
+        parts = full_name.split()
+        while len(parts) > 1 and parts[-1].lower().rstrip(".") in _NAME_SUFFIXES:
+            parts.pop()
+        if len(parts) >= 2:
+            first, last = parts[0], parts[-1]
+        elif parts:
+            first, last = parts[0], "Unknown"
+
+    if not first and full_name:
+        first = full_name.split()[0]
+    if not last and full_name:
+        last = full_name.split()[-1]
+
+    return first or "Unknown", last or "Unknown"
+
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
@@ -143,9 +172,67 @@ def upsert_awards(client, awards: list[dict], dry_run: bool) -> dict[str, str]:
     return slug_to_id
 
 
+def deduplicate_source_data(recipients: list[dict]) -> list[dict]:
+    """Remove duplicate records from source data before inserting."""
+    seen: set[str] = set()
+    unique: list[dict] = []
+
+    for rec in recipients:
+        # Prefer source_url as dedup key (each CMOHS page is unique per recipient)
+        source_url = (rec.get("source_url") or "").lower().strip()
+        if source_url:
+            key = source_url
+        else:
+            first = (rec.get("first_name") or (rec.get("full_name") or "").split()[0] if rec.get("full_name") else "").lower().strip()
+            last = (rec.get("last_name") or (rec.get("full_name") or "").split()[-1] if rec.get("full_name") else "").lower().strip()
+            branch = (rec.get("branch") or "").lower().strip()
+            conflict = (rec.get("conflict") or "").lower().strip()
+            date_action = (rec.get("date_of_action") or "").lower().strip()
+            key = f"{first}|{last}|{branch}|{conflict}|{date_action}"
+
+        if key not in seen:
+            seen.add(key)
+            unique.append(rec)
+
+    removed = len(recipients) - len(unique)
+    if removed > 0:
+        logger.info("Deduplicated source data: removed %d duplicates (%d -> %d)",
+                     removed, len(recipients), len(unique))
+    return unique
+
+
+def clear_existing_data(client, dry_run: bool) -> None:
+    """Clear recipient_awards and recipients tables for idempotent re-seeding."""
+    if dry_run:
+        logger.info("[DRY RUN] Would clear recipient_awards and recipients tables")
+        return
+
+    logger.info("Clearing existing recipient_awards...")
+    page_size = 1000
+    while True:
+        resp = client.table("recipient_awards").select("id").range(0, page_size - 1).execute()
+        if not resp.data:
+            break
+        ids = [r["id"] for r in resp.data]
+        client.table("recipient_awards").delete().in_("id", ids).execute()
+
+    logger.info("Clearing existing recipients...")
+    while True:
+        resp = client.table("recipients").select("id").range(0, page_size - 1).execute()
+        if not resp.data:
+            break
+        ids = [r["id"] for r in resp.data]
+        client.table("recipients").delete().in_("id", ids).execute()
+
+    logger.info("Tables cleared.")
+
+
 def upsert_recipients(client, recipients: list[dict],
                        dry_run: bool) -> list[dict]:
     """Upsert recipients and return records with their DB ids."""
+    # Deduplicate source data before inserting
+    recipients = deduplicate_source_data(recipients)
+
     results: list[dict] = []
     inserted = updated = errors = 0
     batch_size = 50
@@ -154,13 +241,8 @@ def upsert_recipients(client, recipients: list[dict],
         batch = recipients[i: i + batch_size]
         rows = []
         for rec in batch:
-            # Parse first/last name from full_name if not already split
-            first_name = rec.get("first_name", "")
-            last_name = rec.get("last_name", "")
-            if not first_name and rec.get("full_name"):
-                parts = rec["full_name"].split()
-                first_name = parts[0] if parts else ""
-                last_name = parts[-1] if len(parts) > 1 else ""
+            # Parse first/last name, handling suffixes like Jr, III
+            first_name, last_name = parse_names(rec)
 
             # Parse date strings to ISO format (YYYY-MM-DD) for Supabase
             date_of_action = _parse_date(rec.get("date_of_action", ""))
@@ -355,6 +437,9 @@ def main() -> None:
     # Build awards list
     awards = build_awards_list(recipients, awards_seed)
     logger.info("Total unique awards to upsert: %d", len(awards))
+
+    # 0. Clear existing data for idempotent re-seeding
+    clear_existing_data(client, args.dry_run)
 
     # 1. Upsert awards
     slug_to_id = upsert_awards(client, awards, args.dry_run)
