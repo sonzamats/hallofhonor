@@ -133,8 +133,11 @@ export function extractStateCode(location: string | null): string | null {
     }
   }
 
-  // Fallback: search for any state name anywhere in the string
-  for (const [name, code] of Object.entries(STATE_NAME_TO_CODE)) {
+  // Fallback: search for any state name anywhere in the string.
+  // Sort longest names first so "West Virginia" matches before "Virginia".
+  const sortedNames = Object.entries(STATE_NAME_TO_CODE)
+    .sort((a, b) => b[0].length - a[0].length);
+  for (const [name, code] of sortedNames) {
     if (lower.includes(name)) return code;
   }
 
