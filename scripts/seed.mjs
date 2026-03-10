@@ -252,6 +252,8 @@ async function seedAwards(awardsData) {
 // Seed recipients
 // ---------------------------------------------------------------------------
 async function seedRecipients(recipients) {
+  // Filter out scraping artifacts (e.g., nav text captured as records)
+  recipients = recipients.filter(r => r.full_name && !r.full_name.includes('Questions?'));
   console.log(`\nSeeding ${recipients.length} recipients...`);
   const BATCH = 50;
   let inserted = 0;
