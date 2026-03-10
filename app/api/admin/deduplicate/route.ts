@@ -31,13 +31,12 @@ export async function GET(request: Request) {
       conflict: string | null;
       date_of_action: string | null;
       citation: string | null;
-      created_at: string;
     }>(
       () =>
         supabase
           .from('recipients')
-          .select('id, first_name, last_name, rank, branch, conflict, date_of_action, citation, created_at')
-          .order('created_at', { ascending: true }) as any
+          .select('id, first_name, last_name, rank, branch, conflict, date_of_action, citation')
+          .order('id', { ascending: true }) as any
     );
 
     // 2. Group duplicates using multiple strategies:
@@ -49,7 +48,6 @@ export async function GET(request: Request) {
         id: string;
         first_name: string;
         last_name: string;
-        created_at: string;
       }>
     >();
 
@@ -74,14 +72,14 @@ export async function GET(request: Request) {
       groups.get(key)!.push(r);
     }
 
-    // 3. Identify duplicates to remove (keep earliest created_at)
+    // 3. Identify duplicates to remove (keep first by id)
     const idsToDelete: string[] = [];
     const remapLinks: Array<{ fromId: string; toId: string }> = [];
 
     for (const [, members] of groups) {
       if (members.length <= 1) continue;
-      // Sort by created_at ascending — keep the first one
-      members.sort((a, b) => a.created_at.localeCompare(b.created_at));
+      // Sort by id ascending — keep the first one
+      members.sort((a, b) => a.id.localeCompare(b.id));
       const keepId = members[0].id;
       for (let i = 1; i < members.length; i++) {
         idsToDelete.push(members[i].id);
