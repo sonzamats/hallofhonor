@@ -310,17 +310,22 @@ def link_recipient_awards(client, recipients: list[dict],
                           db_recipients: list[dict],
                           dry_run: bool) -> None:
     """Create recipient_awards linking rows."""
-    # Build a lookup from (name, branch) -> db id
-    name_branch_to_id: dict[tuple[str, str], str] = {}
+    # Build a lookup from (first_name, last_name, branch) -> db id
+    name_branch_to_id: dict[tuple[str, str, str], str] = {}
     for db_rec in db_recipients:
-        key = (db_rec.get("full_name", "").lower(), db_rec.get("branch", "").lower())
+        key = (
+            db_rec.get("first_name", "").lower(),
+            db_rec.get("last_name", "").lower(),
+            db_rec.get("branch", "").lower(),
+        )
         name_branch_to_id[key] = db_rec.get("id", "")
 
     inserted = errors = 0
     rows: list[dict] = []
 
     for rec in recipients:
-        name_key = (rec.get("full_name", "").lower(), rec.get("branch", "").lower())
+        first, last = parse_names(rec)
+        name_key = (first.lower(), last.lower(), rec.get("branch", "").lower())
         recipient_id = name_branch_to_id.get(name_key)
         if not recipient_id:
             continue

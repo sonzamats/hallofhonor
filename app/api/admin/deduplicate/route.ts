@@ -39,9 +39,7 @@ export async function GET(request: Request) {
           .order('id', { ascending: true }) as any
     );
 
-    // 2. Group duplicates using multiple strategies:
-    //    - Primary: name + citation first 100 chars (strongest signal)
-    //    - Secondary: name + branch + conflict + date_of_action (for records without citations)
+    // 2. Group duplicates by name + branch + conflict (most reliable combo)
     const groups = new Map<
       string,
       Array<{
@@ -52,21 +50,12 @@ export async function GET(request: Request) {
     >();
 
     for (const r of allRecipients) {
-      // Use citation-based key when citation exists, otherwise fall back to
-      // name + branch + conflict + date_of_action
-      const key = r.citation
-        ? [
-            r.first_name.toLowerCase().trim(),
-            r.last_name.toLowerCase().trim(),
-            (r.citation || '').slice(0, 100).toLowerCase().trim(),
-          ].join('|')
-        : [
-            r.first_name.toLowerCase().trim(),
-            r.last_name.toLowerCase().trim(),
-            (r.branch || '').toLowerCase().trim(),
-            (r.conflict || '').toLowerCase().trim(),
-            (r.date_of_action || '').toLowerCase().trim(),
-          ].join('|');
+      const key = [
+        r.first_name.toLowerCase().trim(),
+        r.last_name.toLowerCase().trim(),
+        (r.branch || '').toLowerCase().trim(),
+        (r.conflict || '').toLowerCase().trim(),
+      ].join('|');
 
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(r);
