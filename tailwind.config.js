@@ -34,8 +34,13 @@ module.exports = {
       animation: {
         'grain': 'grain 8s steps(10) infinite',
         'float': 'float 6s ease-in-out infinite',
+        'in': 'enter 0.2s ease-out',
       },
       keyframes: {
+        enter: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
         grain: {
           '0%, 100%': { transform: 'translate(0, 0)' },
           '10%': { transform: 'translate(-5%, -10%)' },

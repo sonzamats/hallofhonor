@@ -113,7 +113,7 @@ export default function AwardBadge({
           className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2
             whitespace-nowrap rounded-md bg-navy-900 text-cream text-xs
             font-body px-3 py-1.5 shadow-lg pointer-events-none
-            animate-in fade-in-0 duration-150"
+            animate-in"
         >
           {tooltipText}
           <span

@@ -149,7 +149,7 @@ export default function LeaderboardPage() {
                 <a
                   key={entry.id}
                   href={`/recipient/${entry.id}`}
-                  className={`group grid grid-cols-12 items-center gap-4 rounded-lg border px-4 py-3 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 ${
+                  className={`group grid grid-cols-12 items-center gap-4 rounded-lg border px-4 py-3 transition-all duration-300 animate-in ${
                     isTop3
                       ? 'border-gold-500/20 bg-gold-500/5 hover:border-gold-500/40 hover:bg-gold-500/10'
                       : 'border-navy-800 bg-navy-900/50 hover:border-navy-700 hover:bg-navy-900/80'

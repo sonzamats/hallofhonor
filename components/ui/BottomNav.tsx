@@ -51,13 +51,14 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: '/more',
-    label: 'More',
+    href: '/leaderboard',
+    label: 'Leaders',
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-        <circle cx="12" cy="5" r="1.5" fill="currentColor" />
-        <circle cx="12" cy="19" r="1.5" fill="currentColor" />
+        <path d="M8 21V11h8v10" />
+        <path d="M4 21V14h4" />
+        <path d="M16 21V8h4v13" />
+        <path d="M2 21h20" />
       </svg>
     ),
   },
