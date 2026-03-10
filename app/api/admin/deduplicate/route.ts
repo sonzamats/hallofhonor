@@ -87,51 +87,42 @@ export async function GET(request: Request) {
       });
     }
 
-    // 4. Remap recipient_awards links
-    let remapped = 0;
-    let remapErrors = 0;
+    // 4. Delete recipient_awards for all duplicate IDs first (clears FK constraints)
+    let linksDeleted = 0;
+    let linkDeleteErrors = 0;
+    const BATCH = 100;
 
-    // Process in batches — update links pointing to duplicate IDs
-    for (const { fromId, toId } of remapLinks) {
-      // First try to update the link
-      const { error: updateErr } = await supabase
+    for (let i = 0; i < idsToDelete.length; i += BATCH) {
+      const batch = idsToDelete.slice(i, i + BATCH);
+      const { data, error } = await supabase
         .from('recipient_awards')
-        .update({ recipient_id: toId })
-        .eq('recipient_id', fromId);
+        .delete()
+        .in('recipient_id', batch)
+        .select('id');
 
-      if (updateErr) {
-        // If update fails (likely unique constraint), just delete the orphan links
-        const { error: delErr } = await supabase
-          .from('recipient_awards')
-          .delete()
-          .eq('recipient_id', fromId);
-
-        if (delErr) {
-          remapErrors++;
-        } else {
-          remapped++;
-        }
+      if (error) {
+        linkDeleteErrors += batch.length;
       } else {
-        remapped++;
+        linksDeleted += data?.length ?? 0;
       }
     }
 
     // 5. Delete duplicate recipients in batches
     let deleted = 0;
     let deleteErrors = 0;
-    const BATCH = 100;
 
     for (let i = 0; i < idsToDelete.length; i += BATCH) {
       const batch = idsToDelete.slice(i, i + BATCH);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('recipients')
         .delete()
-        .in('id', batch);
+        .in('id', batch)
+        .select('id');
 
       if (error) {
         deleteErrors += batch.length;
       } else {
-        deleted += batch.length;
+        deleted += data?.length ?? 0;
       }
     }
 
@@ -144,8 +135,8 @@ export async function GET(request: Request) {
       mode: 'EXECUTED',
       originalRecipients: allRecipients.length,
       duplicateGroupsFound: Array.from(groups.values()).filter((g) => g.length > 1).length,
-      linksRemapped: remapped,
-      remapErrors,
+      linksDeleted,
+      linkDeleteErrors,
       recipientsDeleted: deleted,
       deleteErrors,
       finalRecipientCount: count,
