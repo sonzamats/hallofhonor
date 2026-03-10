@@ -317,7 +317,12 @@ async function seedRecipients(recipients) {
 async function linkAwards(slugToId, dbRecipients, originalRecipients) {
   console.log(`\nLinking recipient awards...`);
 
-  // Build lookup: (full_name_lower, branch_lower) -> db id
+  // Use positional matching: dbRecipients[i] corresponds to originalRecipients[i]
+  // since they were inserted in the same order.  Fall back to name matching
+  // if the arrays differ in length.
+  const usePositional = dbRecipients.length === originalRecipients.length;
+
+  // Build name lookup as fallback (using first_name+last_name to match DB full_name)
   const nameLookup = new Map();
   for (const r of dbRecipients) {
     const key = `${(r.full_name || '').toLowerCase()}|${(r.branch || '').toLowerCase()}`;
@@ -325,10 +330,27 @@ async function linkAwards(slugToId, dbRecipients, originalRecipients) {
   }
 
   const rows = [];
-  for (const rec of originalRecipients) {
-    const branch = normalizeBranch(rec.branch);
-    const key = `${(rec.full_name || '').toLowerCase()}|${(branch || '').toLowerCase()}`;
-    const recipientId = nameLookup.get(key);
+  for (let idx = 0; idx < originalRecipients.length; idx++) {
+    const rec = originalRecipients[idx];
+
+    // Try positional match first (most reliable)
+    let recipientId = usePositional ? dbRecipients[idx]?.id : null;
+
+    // Fall back to name matching
+    if (!recipientId) {
+      const branch = normalizeBranch(rec.branch);
+      // Try original full_name
+      let key = `${(rec.full_name || '').toLowerCase()}|${(branch || '').toLowerCase()}`;
+      recipientId = nameLookup.get(key);
+      // Try first+last as DB may generate full_name that way
+      if (!recipientId) {
+        const first = rec.first_name || (rec.full_name || '').split(' ')[0] || '';
+        const last = rec.last_name || (rec.full_name || '').split(' ').slice(-1)[0] || '';
+        key = `${first.toLowerCase()} ${last.toLowerCase()}|${(branch || '').toLowerCase()}`;
+        recipientId = nameLookup.get(key);
+      }
+    }
+
     if (!recipientId) continue;
 
     for (const awardName of (rec.awards || [])) {

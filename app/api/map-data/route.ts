@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const award = searchParams.get('award') ?? undefined;
 
     // If filtering by award, resolve recipient IDs first
-    let recipientIdFilter: string[] | null = null;
+    let recipientIdFilter: Set<string> | null = null;
     if (award) {
       const { data: awardData } = await getSupabase()
         .from('awards')
@@ -35,23 +35,21 @@ export async function GET(request: NextRequest) {
           headers: { 'Cache-Control': 'public, s-maxage=3600' },
         });
       }
-      recipientIdFilter = awardRecipients.map((r) => r.recipient_id);
+      recipientIdFilter = new Set(awardRecipients.map((r) => r.recipient_id));
     }
 
-    // Paginate through ALL recipients to avoid Supabase row-limit caps
-    const allRows = await fetchAllRows<{ entered_service_state: string | null }>(
-      () => {
-        let q = getSupabase().from('recipients').select('entered_service_state');
-        if (recipientIdFilter) {
-          q = q.in('id', recipientIdFilter);
-        }
-        return q as any;
-      }
+    // Paginate through ALL recipients (always fetch all, filter client-side
+    // to avoid URL length limits when recipientIdFilter has thousands of IDs)
+    const allRows = await fetchAllRows<{ id: string; entered_service_state: string | null }>(
+      () => getSupabase().from('recipients').select('id, entered_service_state') as any
     );
 
     // Aggregate counts by normalized 2-letter state code
     const stateCounts: Record<string, number> = {};
     for (const row of allRows) {
+      // Skip if award filter active and this recipient isn't linked
+      if (recipientIdFilter && !recipientIdFilter.has(row.id)) continue;
+
       const raw = row.entered_service_state;
       if (!raw) continue;
       const code = extractStateCode(raw);

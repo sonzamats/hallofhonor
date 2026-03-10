@@ -52,7 +52,39 @@ export async function getRecipients(params: {
   const limit = params.limit ?? 20;
   const offset = (page - 1) * limit;
 
-  let query = getSupabase().from('recipients').select('*', { count: 'exact' });
+  // Collect award slugs from both single and multi params
+  const awardSlugs: string[] = [];
+  if (params.award) awardSlugs.push(params.award);
+  if (params.awards) awardSlugs.push(...params.awards);
+
+  // Resolve award slugs to IDs for the inner-join filter
+  let awardIds: string[] = [];
+  if (awardSlugs.length > 0) {
+    for (const slug of awardSlugs) {
+      const { data: awardData } = await getSupabase()
+        .from('awards')
+        .select('id')
+        .eq('slug', slug)
+        .single();
+      if (awardData) awardIds.push(awardData.id);
+    }
+    if (awardIds.length === 0) {
+      return { recipients: [], total: 0, page, totalPages: 0 };
+    }
+  }
+
+  // Use !inner join to filter by award — avoids large .in() URL issues
+  const selectClause = awardIds.length > 0
+    ? '*, recipient_awards!inner(award_id)'
+    : '*';
+
+  let query: any = getSupabase().from('recipients').select(selectClause, { count: 'exact' });
+
+  if (awardIds.length === 1) {
+    query = query.eq('recipient_awards.award_id', awardIds[0]);
+  } else if (awardIds.length > 1) {
+    query = query.in('recipient_awards.award_id', awardIds);
+  }
 
   if (params.state) {
     const orFilter = stateOrFilter(params.state);
@@ -67,37 +99,6 @@ export async function getRecipients(params: {
   if (params.posthumous !== undefined) query = query.eq('posthumous', params.posthumous);
   if (params.pow !== undefined) query = query.eq('pow', params.pow);
 
-  // Collect award slugs from both single and multi params
-  const awardSlugs: string[] = [];
-  if (params.award) awardSlugs.push(params.award);
-  if (params.awards) awardSlugs.push(...params.awards);
-
-  if (awardSlugs.length > 0) {
-    const awardIds: string[] = [];
-    for (const slug of awardSlugs) {
-      const { data: awardData } = await getSupabase()
-        .from('awards')
-        .select('id')
-        .eq('slug', slug)
-        .single();
-      if (awardData) awardIds.push(awardData.id);
-    }
-    if (awardIds.length > 0) {
-      const recipientIds = await fetchAllRows<{ recipient_id: string }>(
-        () => getSupabase()
-          .from('recipient_awards')
-          .select('recipient_id')
-          .in('award_id', awardIds) as any
-      );
-      const uniqueIds = Array.from(new Set(recipientIds.map((r) => r.recipient_id)));
-      if (uniqueIds.length > 0) {
-        query = query.in('id', uniqueIds);
-      } else {
-        return { recipients: [], total: 0, page, totalPages: 0 };
-      }
-    }
-  }
-
   query = query.order('last_name').range(offset, offset + limit - 1);
 
   const { data, count, error } = await query;
@@ -105,7 +106,7 @@ export async function getRecipients(params: {
   const total = count ?? 0;
 
   return {
-    recipients: data ?? [],
+    recipients: (data ?? []) as Recipient[],
     total,
     page,
     totalPages: Math.ceil(total / limit),
@@ -146,10 +147,37 @@ export async function searchRecipients(params: {
   const limit = params.limit ?? 20;
   const offset = (page - 1) * limit;
 
-  let query = getSupabase()
+  // Resolve award slugs to IDs
+  let awardIds: string[] = [];
+  if (params.awards && params.awards.length > 0) {
+    for (const slug of params.awards) {
+      const { data: awardData } = await getSupabase()
+        .from('awards')
+        .select('id')
+        .eq('slug', slug)
+        .single();
+      if (awardData) awardIds.push(awardData.id);
+    }
+    if (awardIds.length === 0 && params.awards.length > 0) {
+      return { results: [], total: 0 };
+    }
+  }
+
+  // Use !inner join for award filtering to avoid large .in() URL issues
+  const selectClause = awardIds.length > 0
+    ? '*, recipient_awards!inner(award_id)'
+    : '*';
+
+  let query: any = getSupabase()
     .from('recipients')
-    .select('*', { count: 'exact' })
+    .select(selectClause, { count: 'exact' })
     .textSearch('search_vector', params.q, { type: 'websearch' });
+
+  if (awardIds.length === 1) {
+    query = query.eq('recipient_awards.award_id', awardIds[0]);
+  } else if (awardIds.length > 1) {
+    query = query.in('recipient_awards.award_id', awardIds);
+  }
 
   if (params.branch) query = query.eq('branch', params.branch);
   if (params.conflict) query = query.eq('conflict', params.conflict);
@@ -164,40 +192,13 @@ export async function searchRecipients(params: {
   if (params.posthumous !== undefined) query = query.eq('posthumous', params.posthumous);
   if (params.pow !== undefined) query = query.eq('pow', params.pow);
 
-  // Filter by award slugs if provided
-  if (params.awards && params.awards.length > 0) {
-    const awardIds: string[] = [];
-    for (const slug of params.awards) {
-      const { data: awardData } = await getSupabase()
-        .from('awards')
-        .select('id')
-        .eq('slug', slug)
-        .single();
-      if (awardData) awardIds.push(awardData.id);
-    }
-    if (awardIds.length > 0) {
-      const recipientIds = await fetchAllRows<{ recipient_id: string }>(
-        () => getSupabase()
-          .from('recipient_awards')
-          .select('recipient_id')
-          .in('award_id', awardIds) as any
-      );
-      const uniqueIds = Array.from(new Set(recipientIds.map((r) => r.recipient_id)));
-      if (uniqueIds.length > 0) {
-        query = query.in('id', uniqueIds);
-      } else {
-        return { results: [], total: 0 };
-      }
-    }
-  }
-
   query = query.range(offset, offset + limit - 1);
 
   const { data, count, error } = await query;
   if (error) throw error;
 
   return {
-    results: data ?? [],
+    results: (data ?? []) as Recipient[],
     total: count ?? 0,
   };
 }
@@ -267,13 +268,20 @@ export async function getStateSummary(stateCode: string) {
 
   if (recipients.length === 0) return null;
 
+  // Fetch recipient_awards in batches to avoid URL-length limits with large .in() clauses
   const recipientIds = recipients.map((r) => r.id);
-  const recipientAwards = await fetchAllRows<any>(
-    () => getSupabase()
-      .from('recipient_awards')
-      .select('*, awards(*)')
-      .in('recipient_id', recipientIds) as any
-  );
+  const recipientAwards: any[] = [];
+  const BATCH_SIZE = 300;
+  for (let i = 0; i < recipientIds.length; i += BATCH_SIZE) {
+    const batch = recipientIds.slice(i, i + BATCH_SIZE);
+    const rows = await fetchAllRows<any>(
+      () => getSupabase()
+        .from('recipient_awards')
+        .select('*, awards(*)')
+        .in('recipient_id', batch) as any
+    );
+    recipientAwards.push(...rows);
+  }
 
   const awardBreakdown: Record<string, number> = {};
   const recipientAwardSlugs: Record<string, string[]> = {};
@@ -341,7 +349,11 @@ export async function getLeaderboard(params: {
     return { ...r, score };
   });
 
-  scored.sort((a: any, b: any) => b.score - a.score);
+  scored.sort((a: any, b: any) => {
+    if (b.score !== a.score) return b.score - a.score;
+    // Tie-break by name for stable ordering
+    return (a.full_name ?? '').localeCompare(b.full_name ?? '');
+  });
   return scored.slice(0, limit);
 }
 
