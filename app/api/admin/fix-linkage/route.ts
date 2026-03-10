@@ -65,10 +65,11 @@ export async function GET() {
       });
     }
 
-    // 5. Insert missing links in batches
+    // 5. Upsert missing links in batches
     const BATCH = 100;
     let created = 0;
     let errors = 0;
+    const errorDetails: string[] = [];
 
     for (let i = 0; i < missing.length; i += BATCH) {
       const batch = missing.slice(i, i + BATCH).map((r) => ({
@@ -81,11 +82,14 @@ export async function GET() {
 
       const { data, error } = await supabase
         .from('recipient_awards')
-        .insert(batch)
+        .upsert(batch, { onConflict: 'recipient_id,award_id' })
         .select('id');
 
       if (error) {
         errors += batch.length;
+        if (errorDetails.length < 5) {
+          errorDetails.push(`Batch ${i}: ${error.message} (code: ${error.code})`);
+        }
       } else {
         created += data?.length ?? 0;
       }
@@ -97,6 +101,7 @@ export async function GET() {
       existingLinks: existingLinks.length,
       created,
       errors,
+      ...(errorDetails.length > 0 && { errorDetails }),
     });
   } catch (error: any) {
     return NextResponse.json(
