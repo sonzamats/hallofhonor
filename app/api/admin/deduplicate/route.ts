@@ -87,47 +87,52 @@ export async function GET(request: Request) {
       });
     }
 
-    // 4. Delete recipient_awards for all duplicate IDs first (clears FK constraints)
-    let linksDeleted = 0;
-    let linkDeleteErrors = 0;
+    // 4. Count links + recipients before deletion
+    const { count: linksBefore } = await supabase
+      .from('recipient_awards')
+      .select('*', { count: 'exact', head: true });
+
+    const { count: recipientsBefore } = await supabase
+      .from('recipients')
+      .select('*', { count: 'exact', head: true });
+
+    // 5. Delete recipient_awards for all duplicate IDs first (clears FK constraints)
+    const linkErrors: string[] = [];
     const BATCH = 100;
 
     for (let i = 0; i < idsToDelete.length; i += BATCH) {
       const batch = idsToDelete.slice(i, i + BATCH);
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('recipient_awards')
         .delete()
-        .in('recipient_id', batch)
-        .select('id');
+        .in('recipient_id', batch);
 
       if (error) {
-        linkDeleteErrors += batch.length;
-      } else {
-        linksDeleted += data?.length ?? 0;
+        linkErrors.push(`batch ${i}: ${error.message}`);
       }
     }
 
-    // 5. Delete duplicate recipients in batches
-    let deleted = 0;
-    let deleteErrors = 0;
+    // 6. Delete duplicate recipients in batches
+    const recipientErrors: string[] = [];
 
     for (let i = 0; i < idsToDelete.length; i += BATCH) {
       const batch = idsToDelete.slice(i, i + BATCH);
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('recipients')
         .delete()
-        .in('id', batch)
-        .select('id');
+        .in('id', batch);
 
       if (error) {
-        deleteErrors += batch.length;
-      } else {
-        deleted += data?.length ?? 0;
+        recipientErrors.push(`batch ${i}: ${error.message}`);
       }
     }
 
-    // 6. Final count
-    const { count } = await supabase
+    // 7. Count after deletion
+    const { count: linksAfter } = await supabase
+      .from('recipient_awards')
+      .select('*', { count: 'exact', head: true });
+
+    const { count: recipientsAfter } = await supabase
       .from('recipients')
       .select('*', { count: 'exact', head: true });
 
@@ -135,11 +140,15 @@ export async function GET(request: Request) {
       mode: 'EXECUTED',
       originalRecipients: allRecipients.length,
       duplicateGroupsFound: Array.from(groups.values()).filter((g) => g.length > 1).length,
-      linksDeleted,
-      linkDeleteErrors,
-      recipientsDeleted: deleted,
-      deleteErrors,
-      finalRecipientCount: count,
+      idsToDelete: idsToDelete.length,
+      linksBefore,
+      linksAfter,
+      linksRemoved: (linksBefore ?? 0) - (linksAfter ?? 0),
+      recipientsBefore,
+      recipientsAfter,
+      recipientsRemoved: (recipientsBefore ?? 0) - (recipientsAfter ?? 0),
+      linkErrors: linkErrors.length > 0 ? linkErrors.slice(0, 5) : 'none',
+      recipientErrors: recipientErrors.length > 0 ? recipientErrors.slice(0, 5) : 'none',
     });
   } catch (error: any) {
     return NextResponse.json(
