@@ -18,20 +18,24 @@ export async function GET(request: NextRequest) {
         .eq('slug', award)
         .single();
 
-      if (awardData) {
-        const awardRecipients = await fetchAllRows<{ recipient_id: string }>(
-          () => getSupabase()
-            .from('recipient_awards')
-            .select('recipient_id')
-            .eq('award_id', awardData.id) as any
-        );
-        if (awardRecipients.length === 0) {
-          return NextResponse.json({}, {
-            headers: { 'Cache-Control': 'public, s-maxage=3600' },
-          });
-        }
-        recipientIdFilter = awardRecipients.map((r) => r.recipient_id);
+      if (!awardData) {
+        return NextResponse.json({}, {
+          headers: { 'Cache-Control': 'public, s-maxage=3600' },
+        });
       }
+
+      const awardRecipients = await fetchAllRows<{ recipient_id: string }>(
+        () => getSupabase()
+          .from('recipient_awards')
+          .select('recipient_id')
+          .eq('award_id', awardData.id) as any
+      );
+      if (awardRecipients.length === 0) {
+        return NextResponse.json({}, {
+          headers: { 'Cache-Control': 'public, s-maxage=3600' },
+        });
+      }
+      recipientIdFilter = awardRecipients.map((r) => r.recipient_id);
     }
 
     // Paginate through ALL recipients to avoid Supabase row-limit caps

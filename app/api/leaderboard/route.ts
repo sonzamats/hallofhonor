@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
       conflict: searchParams.get('conflict') ?? undefined,
       branch: searchParams.get('branch') ?? undefined,
       state: searchParams.get('state') ?? undefined,
-      limit: parseInt(searchParams.get('limit') ?? '50', 10),
+      limit: Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50', 10) || 50)),
     });
 
     return NextResponse.json(data, {

@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
       posthumous: searchParams.has('posthumous') ? searchParams.get('posthumous') === 'true' : undefined,
       pow: searchParams.has('pow') ? searchParams.get('pow') === 'true' : undefined,
       withValor: searchParams.has('withValor') ? searchParams.get('withValor') === 'true' : undefined,
-      page: parseInt(searchParams.get('page') ?? '1', 10),
-      limit: parseInt(searchParams.get('limit') ?? '20', 10),
+      page: Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1),
+      limit: Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '20', 10) || 20)),
     });
 
     return NextResponse.json(data, {
