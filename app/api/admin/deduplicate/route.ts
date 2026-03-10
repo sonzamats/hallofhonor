@@ -76,6 +76,64 @@ export async function GET(request: Request) {
       }
     }
 
+    // Diagnostic mode: test a single delete to see what happens
+    const testMode = url.searchParams.get('test') === 'true';
+    if (testMode && idsToDelete.length > 0) {
+      const testId = idsToDelete[0];
+
+      // Verify this ID exists
+      const { data: existCheck, error: existErr } = await supabase
+        .from('recipients')
+        .select('id, first_name, last_name')
+        .eq('id', testId)
+        .maybeSingle();
+
+      // Try count
+      const { count: countBefore, error: countErr } = await supabase
+        .from('recipients')
+        .select('*', { count: 'exact', head: true });
+
+      // Try deleting the associated link first
+      const linkDel = await supabase
+        .from('recipient_awards')
+        .delete()
+        .eq('recipient_id', testId)
+        .select('id');
+
+      // Try deleting one recipient
+      const recipDel = await supabase
+        .from('recipients')
+        .delete()
+        .eq('id', testId)
+        .select('id');
+
+      // Count after
+      const { count: countAfter } = await supabase
+        .from('recipients')
+        .select('*', { count: 'exact', head: true });
+
+      // Verify deletion
+      const { data: afterCheck } = await supabase
+        .from('recipients')
+        .select('id')
+        .eq('id', testId)
+        .maybeSingle();
+
+      return NextResponse.json({
+        mode: 'TEST — single delete diagnostic',
+        testId,
+        existsBefore: { data: existCheck, error: existErr?.message ?? null },
+        countBefore,
+        countError: countErr?.message ?? null,
+        linkDelete: { data: linkDel.data, error: linkDel.error?.message ?? null, status: linkDel.status, statusText: linkDel.statusText },
+        recipientDelete: { data: recipDel.data, error: recipDel.error?.message ?? null, status: recipDel.status, statusText: recipDel.statusText },
+        countAfter,
+        existsAfter: afterCheck,
+        totalFetched: allRecipients.length,
+        idsToDelete: idsToDelete.length,
+      });
+    }
+
     if (!confirm) {
       return NextResponse.json({
         mode: 'DRY RUN — add ?confirm=true to execute',
