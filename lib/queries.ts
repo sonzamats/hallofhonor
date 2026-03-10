@@ -39,6 +39,7 @@ export async function getAwardBySlug(slug: string): Promise<Award | null> {
 export async function getRecipients(params: {
   state?: string;
   award?: string;
+  awards?: string[];
   conflict?: string;
   branch?: string;
   posthumous?: boolean;
@@ -66,21 +67,33 @@ export async function getRecipients(params: {
   if (params.posthumous !== undefined) query = query.eq('posthumous', params.posthumous);
   if (params.pow !== undefined) query = query.eq('pow', params.pow);
 
-  if (params.award) {
-    const { data: awardData } = await getSupabase()
-      .from('awards')
-      .select('id')
-      .eq('slug', params.award)
-      .single();
-    if (awardData) {
+  // Collect award slugs from both single and multi params
+  const awardSlugs: string[] = [];
+  if (params.award) awardSlugs.push(params.award);
+  if (params.awards) awardSlugs.push(...params.awards);
+
+  if (awardSlugs.length > 0) {
+    const awardIds: string[] = [];
+    for (const slug of awardSlugs) {
+      const { data: awardData } = await getSupabase()
+        .from('awards')
+        .select('id')
+        .eq('slug', slug)
+        .single();
+      if (awardData) awardIds.push(awardData.id);
+    }
+    if (awardIds.length > 0) {
       const recipientIds = await fetchAllRows<{ recipient_id: string }>(
         () => getSupabase()
           .from('recipient_awards')
           .select('recipient_id')
-          .eq('award_id', awardData.id) as any
+          .in('award_id', awardIds) as any
       );
-      if (recipientIds.length > 0) {
-        query = query.in('id', recipientIds.map((r) => r.recipient_id));
+      const uniqueIds = Array.from(new Set(recipientIds.map((r) => r.recipient_id)));
+      if (uniqueIds.length > 0) {
+        query = query.in('id', uniqueIds);
+      } else {
+        return { recipients: [], total: 0, page, totalPages: 0 };
       }
     }
   }
@@ -150,6 +163,33 @@ export async function searchRecipients(params: {
   }
   if (params.posthumous !== undefined) query = query.eq('posthumous', params.posthumous);
   if (params.pow !== undefined) query = query.eq('pow', params.pow);
+
+  // Filter by award slugs if provided
+  if (params.awards && params.awards.length > 0) {
+    const awardIds: string[] = [];
+    for (const slug of params.awards) {
+      const { data: awardData } = await getSupabase()
+        .from('awards')
+        .select('id')
+        .eq('slug', slug)
+        .single();
+      if (awardData) awardIds.push(awardData.id);
+    }
+    if (awardIds.length > 0) {
+      const recipientIds = await fetchAllRows<{ recipient_id: string }>(
+        () => getSupabase()
+          .from('recipient_awards')
+          .select('recipient_id')
+          .in('award_id', awardIds) as any
+      );
+      const uniqueIds = Array.from(new Set(recipientIds.map((r) => r.recipient_id)));
+      if (uniqueIds.length > 0) {
+        query = query.in('id', uniqueIds);
+      } else {
+        return { results: [], total: 0 };
+      }
+    }
+  }
 
   query = query.range(offset, offset + limit - 1);
 

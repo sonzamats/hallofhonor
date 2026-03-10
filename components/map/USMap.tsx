@@ -79,26 +79,18 @@ function USMapInner({
   onStateClick,
   onStateHover,
 }: USMapProps) {
-  // Compute the max value and tier thresholds
+  // Compute the max value and color function
   const { maxCount, getColor } = useMemo(() => {
     const values = Object.values(stateData || {});
     const max = values.length > 0 ? Math.max(...values) : 0;
 
-    // 5-tier heat scale: 0%, 25%, 50%, 75%, 100%
-    const tierThresholds = [0, 0.25, 0.5, 0.75, 1];
-
     function getColorForCount(count: number): string {
       if (max === 0 || count === 0) return BASE_COLOR;
-      const ratio = count / max;
-
-      // Find which tier band the ratio falls into
-      for (let i = tierThresholds.length - 1; i >= 0; i--) {
-        if (ratio >= tierThresholds[i]) {
-          const t = tierThresholds[i];
-          return interpolateColor(BASE_COLOR, awardColor, t);
-        }
-      }
-      return BASE_COLOR;
+      // Use sqrt scale for better distribution — even low-count states
+      // get a visible tint (min 15% blend) instead of being invisible.
+      const ratio = Math.sqrt(count / max);
+      const t = 0.15 + ratio * 0.85;
+      return interpolateColor(BASE_COLOR, awardColor, t);
     }
 
     return { maxCount: max, getColor: getColorForCount };

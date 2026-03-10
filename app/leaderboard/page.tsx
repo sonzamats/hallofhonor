@@ -43,7 +43,7 @@ export default function LeaderboardPage() {
       const res = await fetch(`/api/leaderboard?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch leaderboard');
       const data = await res.json();
-      setEntries(data.entries ?? data ?? []);
+      setEntries(Array.isArray(data) ? data : []);
     } catch {
       setEntries([]);
     } finally {

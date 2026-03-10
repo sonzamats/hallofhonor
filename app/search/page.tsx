@@ -59,11 +59,28 @@ export default function SearchPage() {
     if (!isMobile) setFiltersOpen(true);
   }, [isMobile]);
 
+  // Reset to page 1 when filters/query/sort change
+  const filtersRef = useRef(filters);
+  const sortRef = useRef(sort);
+  const queryRef = useRef(debouncedQuery);
+
   useEffect(() => {
-    setPage(1);
+    const filtersChanged = filtersRef.current !== filters;
+    const sortChanged = sortRef.current !== sort;
+    const queryChanged = queryRef.current !== debouncedQuery;
+    filtersRef.current = filters;
+    sortRef.current = sort;
+    queryRef.current = debouncedQuery;
+
+    if (filtersChanged || sortChanged || queryChanged) {
+      setPage(1);
+    }
   }, [debouncedQuery, filters, sort]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
     async function fetchResults() {
       setLoading(true);
       try {
@@ -78,20 +95,30 @@ export default function SearchPage() {
         params.set('sort', sort);
         params.set('page', String(page));
 
-        const res = await fetch(`/api/search?${params.toString()}`);
+        const res = await fetch(`/api/search?${params.toString()}`, {
+          signal: controller.signal,
+        });
         if (!res.ok) throw new Error('Search failed');
         const data = await res.json();
-        setResults(data.results ?? []);
-        setTotal(data.total ?? 0);
-      } catch {
-        setResults([]);
-        setTotal(0);
+        if (!cancelled) {
+          setResults(data.results ?? []);
+          setTotal(data.total ?? 0);
+        }
+      } catch (err: any) {
+        if (!cancelled && err?.name !== 'AbortError') {
+          setResults([]);
+          setTotal(0);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     fetchResults();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [debouncedQuery, filters, sort, page]);
 
   const toggleAwardFilter = useCallback((slug: string) => {

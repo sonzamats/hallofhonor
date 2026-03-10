@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const posthumous = searchParams.has('posthumous') ? searchParams.get('posthumous') === 'true' : undefined;
     const pow = searchParams.has('pow') ? searchParams.get('pow') === 'true' : undefined;
     const awardsParam = searchParams.get('awards');
-    const award = awardsParam?.split(',')[0] ?? undefined;
+    const awards = awardsParam ? awardsParam.split(',').filter(Boolean) : undefined;
 
     // If no search query, use the browse/filter endpoint
     if (!q) {
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
         branch,
         conflict,
         state,
-        award,
+        awards,
         posthumous,
         pow,
         page,
