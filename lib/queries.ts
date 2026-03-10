@@ -73,12 +73,13 @@ export async function getRecipients(params: {
       .eq('slug', params.award)
       .single();
     if (awardData) {
-      const { data: recipientIds } = await getSupabase()
-        .from('recipient_awards')
-        .select('recipient_id')
-        .eq('award_id', awardData.id)
-        .limit(10000);
-      if (recipientIds) {
+      const recipientIds = await fetchAllRows<{ recipient_id: string }>(
+        () => getSupabase()
+          .from('recipient_awards')
+          .select('recipient_id')
+          .eq('award_id', awardData.id) as any
+      );
+      if (recipientIds.length > 0) {
         query = query.in('id', recipientIds.map((r) => r.recipient_id));
       }
     }
@@ -165,13 +166,12 @@ export async function getAwardStats(slug: string) {
   const award = await getAwardBySlug(slug);
   if (!award) return null;
 
-  const { data: recipientAwards } = await getSupabase()
-    .from('recipient_awards')
-    .select('*, recipients(*)')
-    .eq('award_id', award.id)
-    .limit(10000);
-
-  const records = recipientAwards ?? [];
+  const records = await fetchAllRows<any>(
+    () => getSupabase()
+      .from('recipient_awards')
+      .select('*, recipients(*)')
+      .eq('award_id', award.id) as any
+  );
 
   const byConflict: Record<string, number> = {};
   const byBranch: Record<string, number> = {};
@@ -204,16 +204,14 @@ export async function getAwardStats(slug: string) {
 export async function getStateSummary(stateCode: string) {
   const stateName = stateCodeToName(stateCode);
 
-  // Use ILIKE as a broad filter, then refine with extractStateCode
-  // to avoid over-matching (e.g. "Virginia" matching "West Virginia")
+  // Use end-anchored ILIKE via stateOrFilter for precise matching,
+  // then refine with extractStateCode to avoid over-matching
   const candidates = await fetchAllRows<Recipient>(
     () => {
       let q = getSupabase().from('recipients').select('*');
-      if (stateName !== stateCode) {
-        // Broad filter: match code, exact name, or entries containing the name
-        q = q.or(
-          `entered_service_state.eq.${stateCode},entered_service_state.eq.${stateName},entered_service_state.ilike.%${stateName}%`
-        );
+      const orFilter = stateOrFilter(stateCode);
+      if (orFilter) {
+        q = q.or(orFilter);
       } else {
         q = q.eq('entered_service_state', stateCode);
       }
@@ -238,9 +236,15 @@ export async function getStateSummary(stateCode: string) {
   );
 
   const awardBreakdown: Record<string, number> = {};
+  const recipientAwardSlugs: Record<string, string[]> = {};
   for (const ra of recipientAwards) {
     const slug = ra.awards?.slug;
-    if (slug) awardBreakdown[slug] = (awardBreakdown[slug] ?? 0) + 1;
+    if (slug) {
+      awardBreakdown[slug] = (awardBreakdown[slug] ?? 0) + 1;
+      const rid = ra.recipient_id;
+      if (!recipientAwardSlugs[rid]) recipientAwardSlugs[rid] = [];
+      recipientAwardSlugs[rid].push(slug);
+    }
   }
 
   return {
@@ -252,6 +256,7 @@ export async function getStateSummary(stateCode: string) {
       full_name: r.full_name,
       rank: r.rank,
       branch: r.branch,
+      awardSlugs: recipientAwardSlugs[r.id] ?? [],
     })),
   };
 }
@@ -264,26 +269,27 @@ export async function getLeaderboard(params: {
 }) {
   const limit = params.limit ?? 50;
 
-  let query = getSupabase()
-    .from('recipients')
-    .select('*, recipient_awards(*, awards(*))')
-    .limit(10000);
+  const data = await fetchAllRows<any>(
+    () => {
+      let q = getSupabase()
+        .from('recipients')
+        .select('*, recipient_awards(*, awards(*))');
 
-  if (params.conflict) query = query.eq('conflict', params.conflict);
-  if (params.branch) query = query.eq('branch', params.branch);
-  if (params.state) {
-    const orFilter = stateOrFilter(params.state);
-    if (orFilter) {
-      query = query.or(orFilter);
-    } else {
-      query = query.eq('entered_service_state', params.state);
+      if (params.conflict) q = q.eq('conflict', params.conflict);
+      if (params.branch) q = q.eq('branch', params.branch);
+      if (params.state) {
+        const orFilter = stateOrFilter(params.state);
+        if (orFilter) {
+          q = q.or(orFilter);
+        } else {
+          q = q.eq('entered_service_state', params.state);
+        }
+      }
+      return q as any;
     }
-  }
+  );
 
-  const { data, error } = await query;
-  if (error) throw error;
-
-  const scored = (data ?? []).map((r: any) => {
+  const scored = data.map((r: any) => {
     const awards = r.recipient_awards ?? [];
     let score = 0;
     for (const ra of awards) {

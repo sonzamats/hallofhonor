@@ -21,6 +21,7 @@ interface StateSummary {
     full_name: string;
     rank: string | null;
     branch: string | null;
+    awardSlugs?: string[];
   }[];
 }
 
@@ -101,7 +102,15 @@ export default function StatePanel({
     };
   }, [isOpen]);
 
-  const totalDecorations = data?.totalRecipients ?? 0;
+  const filteredRecipients = data?.topRecipients
+    ? activeAward
+      ? data.topRecipients.filter((r) => r.awardSlugs?.includes(activeAward))
+      : data.topRecipients
+    : [];
+
+  const totalDecorations = activeAward
+    ? filteredRecipients.length
+    : (data?.totalRecipients ?? 0);
 
   return (
     <AnimatePresence>
@@ -135,7 +144,7 @@ export default function StatePanel({
               activeAward={activeAward}
               onClose={onClose}
               closeButtonRef={closeButtonRef}
-              data={data}
+              recipients={filteredRecipients}
               loading={loading}
               onAwardSelect={onAwardSelect}
             />
@@ -167,7 +176,7 @@ export default function StatePanel({
               activeAward={activeAward}
               onClose={onClose}
               closeButtonRef={closeButtonRef}
-              data={data}
+              recipients={filteredRecipients}
               loading={loading}
               onAwardSelect={onAwardSelect}
             />
@@ -188,7 +197,7 @@ interface PanelContentProps {
   activeAward: string | null;
   onClose: () => void;
   closeButtonRef: React.RefObject<HTMLButtonElement | null>;
-  data: StateSummary | null;
+  recipients: StateSummary['topRecipients'];
   loading: boolean;
   onAwardSelect?: (slug: string | null) => void;
 }
@@ -199,7 +208,7 @@ function PanelContent({
   activeAward,
   onClose,
   closeButtonRef,
-  data,
+  recipients,
   loading,
   onAwardSelect,
 }: PanelContentProps) {
@@ -271,13 +280,13 @@ function PanelContent({
               />
             ))}
           </div>
-        ) : !data || data.topRecipients.length === 0 ? (
+        ) : recipients.length === 0 ? (
           <p className="font-body text-sm text-text-muted">
             No recipients found for this state.
           </p>
         ) : (
           <div className="space-y-2">
-            {data.topRecipients.map((r) => (
+            {recipients.map((r) => (
               <a
                 key={r.id}
                 href={`/recipient/${r.id}`}

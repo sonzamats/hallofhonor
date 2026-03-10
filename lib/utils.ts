@@ -138,5 +138,11 @@ export function extractStateCode(location: string | null): string | null {
     if (lower.includes(name)) return code;
   }
 
+  // Special case: Hawaiian island names and counties
+  const hawaiianKeywords = ['honolulu', 'oahu', 'maui', 'kauai', 'kona', 'hilo', 'waialua', 'pearl harbor'];
+  for (const kw of hawaiianKeywords) {
+    if (lower.includes(kw)) return 'HI';
+  }
+
   return null;
 }
